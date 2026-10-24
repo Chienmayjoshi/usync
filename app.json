@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "usync",
+    "slug": "usync",
+    "version": "0.1.0",
+    "scheme": "usync",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0A0F",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.usync.app"
+    },
+    "android": {
+      "package": "com.usync.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0A0F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "backgroundColor": "#0B0A0F"
+        }
+      ]
+    ]
+  }
+}
