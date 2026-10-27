@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
-import { Share, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Pressable, Share, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 
 import { useAccount, useNames } from '@/features/account/account';
@@ -8,6 +9,7 @@ import { useDeck } from '@/features/deck/store';
 import { type SwipeDir, SwipeDeck } from '@/features/deck/SwipeDeck';
 import { PartnerDropZone } from '@/features/deck/tradeTarget';
 import { useOpenDrop } from '@/features/drop/DropSheet';
+import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { haptics } from '@/theme/haptics';
 import { theme } from '@/theme/tokens';
 import { PopButton } from '@/ui/PopButton';
@@ -25,6 +27,7 @@ function balanceCopy(tilt: number, partner: string | null) {
 
 export default function DeckScreen() {
   const { state, dispatch, ready } = useDeck();
+  const [updating, setUpdating] = useState<Card | null>(null);
   const { inviteCode } = useAccount();
   const names = useNames();
   const toast = useToast();
@@ -60,10 +63,9 @@ export default function DeckScreen() {
     }
   };
 
-  const onHold = (card: Card) => {
-    haptics.take();
-    toast({ kind: 'info', title: 'Hold to update', body: `Updates for “${card.title}” arrive in M4.`, ms: 3000 });
-  };
+  const onHold = (card: Card) => setUpdating(card);
+
+
 
   const later = laterCount(state);
 
@@ -93,11 +95,13 @@ export default function DeckScreen() {
       )}
 
       {waiting.length > 0 && (
-        <View style={styles.waiting}>
-          <Text variant="label/md" color={theme.color.text.muted}>Waiting on others</Text>
-          {waiting.map((w) => <Text key={w.id} variant="body/md">{`${w.title}  ·  ${w.when}`}</Text>)}
-        </View>
+        // One line only: the deck can't scroll (it would fight the swipes), so the list lives on Us.
+        <Pressable style={styles.waiting} onPress={() => router.navigate('/us')} accessibilityRole="link">
+          <Text variant="label/md" color={theme.color.text.muted}>{`Waiting on others  ·  ${waiting.length}`}</Text>
+          <Text variant="body/md" numberOfLines={1}>{`${waiting[0].title}${waiting.length > 1 ? ' and more' : ''}  ›`}</Text>
+        </Pressable>
       )}
+      {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </Screen>
   );
 }

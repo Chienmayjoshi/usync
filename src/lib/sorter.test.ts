@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { sortDrop, sortLine, splitDrop } from './sorter';
+import { isWaiting, sortDrop, sortLine, splitDrop } from './sorter';
 
 // Real lines the way people type or dictate them, English and Hinglish.
 const cases: [string, { bucket?: string; when?: string; effort?: string; together?: boolean }][] = [
@@ -53,5 +53,20 @@ describe('splitDrop', () => {
     const cards = sortDrop('kal electrician ko bulana hai aur parcel return karna hai');
     expect(cards.map((c) => c.title)).toEqual(['Electrician bulana', 'Parcel return']);
     expect(cards.map((c) => c.bucket)).toEqual(['Home', 'Errands']);
+  });
+});
+
+describe('isWaiting', () => {
+  it.each([
+    'he needs a spare part, back Tuesday 11am',
+    'electrician will come on saturday',
+    'kal aayega plumber',
+    'they will call back tomorrow',
+    'appointment rescheduled to next week',
+    'out of stock, waiting for delivery',
+  ])('spots waiting in "%s"', (line) => expect(isWaiting(line)).toBe(true));
+
+  it.each(['called them, booked for 5pm', 'paid online', 'done, just need to file the receipt'])('plain progress "%s" is not waiting', (line) => {
+    expect(isWaiting(line)).toBe(false);
   });
 });

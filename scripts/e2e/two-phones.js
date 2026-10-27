@@ -52,5 +52,33 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await m.mouse.up(); await sleep(3000);
   await shot(m, 'e6-m-took');
   await shot(r, 'e7-r-sees');
+  // M4: Meera holds her card and says what changed; it parks in Waiting.
+  await m.mouse.move(200, 400); await m.mouse.down(); await sleep(900); await m.mouse.up();
+  await m.getByText('What changed?').waitFor({ timeout: 8000 });
+  await m.locator('textarea').fill('he needs a spare part, back tuesday 11am');
+  await sleep(300);
+  await shot(m, 'e8-m-update');
+  await m.getByText('Save update').click();
+  await sleep(3000);
+  await shot(r, 'e9-r-sees-waiting');
+  // The technician comes back: Meera closes it from the waiting list on the Us tab.
+  await m.getByText('Us', { exact: true }).click();
+  await m.getByText('Done', { exact: true }).click();
+  await sleep(3000);
+  // Rahul sends a heart from the Us tab; Meera sees it arrive.
+  await r.getByText('Us', { exact: true }).click();
+  await r.getByText('Send a heart').waitFor({ timeout: 8000 });
+  await shot(r, 'e10-r-us-wins');
+  await r.getByText('Send a heart').click();
+  await sleep(2500);
+  await shot(m, 'e11-m-gets-heart');
+  // Sunday Sync: notes stay sealed until both write.
+  for (const [p, note] of [[r, 'Thanks for wrangling the electrician'], [m, 'Thanks for handling the parcel']]) {
+    await p.getByText('Sync', { exact: true }).click();
+    await p.getByPlaceholder('Thanks for chasing the electrician').fill(note);
+    await p.getByText('Seal it').click();
+    await sleep(2500);
+  }
+  await shot(r, 'e12-r-sync-revealed');
   await b.close();
 })().catch((e) => { console.log('FAILED', e.message.split('\n')[0]); process.exit(1); });

@@ -3,6 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useAccount } from '@/features/account/account';
 import { dealTo, type LoadItem } from '@/lib/fairness';
 import { type EventRow, errorText, type Side, supabase, type TaskRow } from '@/lib/supabase';
+import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
 import { type Card, type DeckAction, deckReducer, type DeckState, type Owner, type StoryCard } from './model';
@@ -11,7 +12,17 @@ import { TradeTargetProvider } from './tradeTarget';
 // The deck lives in Supabase. Moves apply locally first (so swipes feel instant), then the
 // server applies the same rules in deck_move and realtime brings both phones back in line.
 
-type Deck = { state: DeckState; dispatch: (a: DeckAction) => void; ready: boolean };
+type Deck = {
+  state: DeckState;
+  dispatch: (a: DeckAction) => void;
+  ready: boolean;
+  /** One line update; `waiting` parks the card off the deck until someone else comes through. */
+  addUpdate: (id: string, note: string, waiting: boolean) => Promise<void>;
+  resume: (id: string) => Promise<void>;
+  /** Task ids I already sent a heart for. */
+  thanked: Set<string>;
+  sendThanks: (id: string) => Promise<void>;
+};
 const Ctx = createContext<Deck | null>(null);
 
 const empty: DeckState = { cards: [], album: [], weeksInSync: 0, undo: null, lastDoneId: null };
@@ -21,12 +32,13 @@ const ownerFor = (row: TaskRow, side: Side): Owner =>
 
 const monthOf = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'This week');
 
-function toState(rows: TaskRow[], events: EventRow[], side: Side): Pick<DeckState, 'cards' | 'album'> {
+function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string): Pick<DeckState, 'cards' | 'album'> {
   const story = new Map<string, string[]>();
   for (const e of events) story.set(e.task_id, [...(story.get(e.task_id) ?? []), e.text]);
   const cards: Card[] = rows.map((r) => ({
     id: r.id, title: r.title, bucket: r.bucket, effort: r.effort, when: r.when_text, detail: r.detail,
     owner: ownerFor(r, side), status: r.status, traded: r.traded, weight: r.weight, story: story.get(r.id) ?? [],
+    doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at, waitingNote: r.waiting_note,
   }));
   const album: StoryCard[] = rows
     .filter((r) => r.status === 'done')
@@ -43,23 +55,31 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [state, setState] = useState<DeckState>(empty);
   const [ready, setReady] = useState(false);
+  const [thanked, setThanked] = useState<Set<string>>(new Set());
   const prev = useRef<Prev | null>(null);
+  // Read inside the realtime callback without resubscribing on every change.
+  const rowsRef = useRef<TaskRow[]>([]);
+  const partnerName = useRef('Your partner');
+  useEffect(() => { rowsRef.current = rows; partnerName.current = partner?.name ?? 'Your partner'; }, [rows, partner]);
   const coupleId = me?.couple_id ?? null;
   const side = me?.side ?? 'a';
+  const myId = me?.id ?? '';
 
   const load = useCallback(async () => {
     if (!coupleId) return;
-    const [t, e] = await Promise.all([
+    const [t, e, th] = await Promise.all([
       supabase.from('tasks').select('*').order('sort_at', { ascending: true }),
       supabase.from('task_events').select('id, task_id, actor, kind, text, at').order('at', { ascending: true }),
+      supabase.from('thanks').select('task_id').eq('from_member', myId),
     ]);
     if (t.error) throw t.error;
     if (e.error) throw e.error;
     const r = t.data as TaskRow[];
     setRows(r);
-    setState((s) => ({ ...s, ...toState(r, e.data as EventRow[], side) }));
+    setThanked(new Set((th.data ?? []).map((x) => x.task_id as string)));
+    setState((s) => ({ ...s, ...toState(r, e.data as EventRow[], side, myId) }));
     setReady(true);
-  }, [coupleId, side]);
+  }, [coupleId, side, myId]);
 
   useEffect(() => {
     if (!coupleId) return;
@@ -70,9 +90,17 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     const ch = supabase.channel(`deck-${coupleId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `couple_id=eq.${coupleId}` }, soon)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'task_events', filter: `couple_id=eq.${coupleId}` }, soon)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'thanks', filter: `couple_id=eq.${coupleId}` }, (p) => {
+        // A heart from my partner is the moment the product is built around: show it right away.
+        const row = p.new as { from_member: string; task_id: string | null };
+        if (row.from_member === myId) return;
+        const title = rowsRef.current.find((x) => x.id === row.task_id)?.title;
+        haptics.success();
+        toast({ kind: 'thanks', title: `${partnerName.current} sent a heart`, body: title ? `for “${title.toLowerCase()}”` : 'for something you did', ms: 5000 });
+      })
       .subscribe();
     return () => { if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
-  }, [coupleId, load, toast]);
+  }, [coupleId, load, toast, myId]);
 
   const fail = useCallback((err: unknown) => {
     toast({ kind: 'info', title: 'That didn’t save', body: errorText(err) });
@@ -111,7 +139,27 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     supabase.rpc('deck_move', { task: a.id, move: a.type }).then(({ error }) => error && fail(error));
   }, [drop, fail, rows]);
 
-  const value = useMemo(() => ({ state, dispatch, ready }), [state, dispatch, ready]);
+  const addUpdate = useCallback(async (id: string, note: string, waiting: boolean) => {
+    const { error } = await supabase.rpc('add_update', { task: id, note, waiting });
+    if (error) throw error;
+    await load();
+  }, [load]);
+
+  const resume = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc('resume_task', { task: id });
+    if (error) throw error;
+    await load();
+  }, [load]);
+
+  const sendThanks = useCallback(async (id: string) => {
+    if (!me?.couple_id) return;
+    setThanked((s) => new Set(s).add(id));
+    const { error } = await supabase.from('thanks').insert({ couple_id: me.couple_id, task_id: id, from_member: me.id });
+    // A second tap on another phone is fine: one heart per job is enforced by the database.
+    if (error && error.code !== '23505') throw error;
+  }, [me]);
+
+  const value = useMemo(() => ({ state, dispatch, ready, addUpdate, resume, thanked, sendThanks }), [state, dispatch, ready, addUpdate, resume, thanked, sendThanks]);
   return (
     <Ctx.Provider value={value}>
       <TradeTargetProvider>{children}</TradeTargetProvider>

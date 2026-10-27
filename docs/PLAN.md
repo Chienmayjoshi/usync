@@ -80,6 +80,8 @@ The laptop path replaces 0c step 3 (no EAS needed). Blocker is still the 403 pus
 Context: Chinmay wants the MVP finished and tested with real scenarios on real phones before any more aesthetics. Polish (plate titles, art, motion tuning) is frozen until M5.
 
 ### Where we are
+Oct 27 update 2: M4 done and verified end to end (hold to update with waiting detection, waiting list on Us with Back on track / Done, thanks hearts delivered live, Sunday Sync replay + sealed appreciations + next hand, weeks in sync, leave space, delete account). Remaining: M3 notifications (needs EXPO_TOKEN as an environment variable and expo.dev, api.expo.dev, u.expo.dev, exp.host allowed), then M5 real test.
+
 Oct 27 update: M1 core is built and verified end to end on the web build against the real Supabase project (sign in, name, start or join a space by code, live shared deck, fairness dealing, server enforced moves with undo). Supabase has `Confirm email` on until Chinmay turns it off. Next: EAS Update link (needs Expo token) or laptop testing, then M2/M3.
 
 Done: a front end prototype on mock data, 2 commits on `claude/gallant-bohr-s0xwkr` (Deck swipe take/trade/together/later/done, drag to Meera, flip to job story, Drop with fake keyword sort, undo/thanks toasts, hand cleared, Us glance + open table + album, Sync stub).

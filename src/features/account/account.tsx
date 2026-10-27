@@ -17,6 +17,7 @@ type Account = {
   createSpace: () => Promise<void>;
   joinSpace: (code: string) => Promise<void>;
   leaveSpace: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const Ctx = createContext<Account | null>(null);
@@ -95,6 +96,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.rpc('join_space', { code });
       if (error) throw error;
       await refresh();
+    },
+    async deleteAccount() {
+      const { error } = await supabase.rpc('delete_my_account');
+      if (error) throw error;
+      await supabase.auth.signOut();
+      setMembers(null);
     },
     async leaveSpace() {
       const { error } = await supabase.rpc('leave_space');

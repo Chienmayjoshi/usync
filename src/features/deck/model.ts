@@ -21,6 +21,10 @@ export type Card = {
   /** Effort weight used only for the balance shape, never shown as a number. */
   weight: number;
   story: string[];
+  /** Set from the backend; absent on locally built cards. */
+  doneBy?: 'me' | 'partner' | null;
+  doneAt?: string | null;
+  waitingNote?: string | null;
 };
 
 export type StoryCard = { id: string; title: string; when: string; together: boolean };
@@ -94,7 +98,8 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     }
     case 'done': {
       const c = find(state.cards, action.id);
-      if (!c || c.status !== 'active') return state;
+      // Waiting cards can close straight away when the technician finally comes through.
+      if (!c || (c.status !== 'active' && c.status !== 'waiting')) return state;
       const story: StoryCard = { id: c.id, title: c.title, when: 'This week', together: c.owner === 'together' };
       return {
         ...state,

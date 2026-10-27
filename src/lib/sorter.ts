@@ -88,3 +88,8 @@ export function sortLine(raw: string): Sorted {
 }
 
 export const sortDrop = (text: string): Sorted[] => splitDrop(text).map(sortLine);
+
+// An update that means "the ball is with someone else": a visit, a part, a callback.
+const WAITING = /\b(waiting|wait|intezaar|will come|coming back|come back|aayega|aayegi|aaega|aaegi|back on|back (?:on )?(?:mon|tue|wed|thu|fri|sat|sun)\w*|back tomorrow|needs? (?:a |the )?(?:spare )?part|spare part|out of stock|reschedul\w*|delayed|on hold|call ?back|will call|they'?ll call|not available|nahi aaya|nahi aayi)\b/i;
+
+export const isWaiting = (note: string) => WAITING.test(note);

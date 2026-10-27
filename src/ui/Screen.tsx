@@ -33,6 +33,7 @@ export function Screen({ kicker, title, children, scroll = true, initials, wrapP
 
 const styles = StyleSheet.create({
   fill: { flex: 1, backgroundColor: theme.color.bg.canvas },
-  body: { paddingHorizontal: 16, paddingBottom: 32, gap: 20, flexGrow: 1, backgroundColor: theme.color.bg.canvas },
+  // Bottom room so the floating Drop button never covers the last controls.
+  body: { paddingHorizontal: 16, paddingBottom: 140, gap: 20, flexGrow: 1, backgroundColor: theme.color.bg.canvas },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 });
