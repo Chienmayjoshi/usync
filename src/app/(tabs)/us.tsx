@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 
+import { useNames } from '@/features/account/account';
 import { partnerCards, tableCards } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { haptics } from '@/theme/haptics';
@@ -11,13 +12,14 @@ import { Text } from '@/ui/Text';
 
 export default function UsScreen() {
   const { state, dispatch } = useDeck();
+  const names = useNames();
   const glance = partnerCards(state);
   const table = tableCards(state);
 
   return (
-    <Screen kicker="Us" title="The two of you">
+    <Screen kicker="Us" title="The two of you" initials={names.initials}>
       <View style={styles.glance}>
-        <Text variant="label/md" color={theme.color.partner.b}>Meera{'’'}s on</Text>
+        <Text variant="label/md" color={theme.color.partner.b}>{names.partner ? `${names.partner}’s on` : 'Your partner hasn’t joined yet'}</Text>
         {glance.length ? glance.map((c) => (
           <View key={c.id} style={styles.glanceRow}>
             <View style={styles.dot} />

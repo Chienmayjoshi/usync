@@ -70,7 +70,7 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
       const c = find(state.cards, action.id);
       if (!c || c.status !== 'deal') return state;
       if (!c.traded) {
-        return { ...state, cards: update(state.cards, c.id, { owner: 'partner', traded: true, story: [...c.story, 'Traded to Meera'] }), undo: snapshot('Traded to Meera') };
+        return { ...state, cards: update(state.cards, c.id, { owner: 'partner', traded: true, story: [...c.story, 'Traded'] }), undo: snapshot('Traded to Meera') };
       }
       // The trade is used: passing again puts it on the open table, never back and forth.
       return { ...state, cards: update(state.cards, c.id, { owner: 'table', story: [...c.story, 'Passed to the open table'] }), undo: snapshot('Passed to the table') };
@@ -161,7 +161,7 @@ export function fakeSort(raw: string): Card {
     bucket: s.bucket,
     effort: s.effort,
     when: s.when,
-    detail: 'Dropped just now. Dealt to you for this demo; with Meera paired it goes into tonight’s hand.',
+    detail: 'Dropped just now.',
     owner: s.together ? 'together' : 'me',
     status: 'deal',
     traded: false,

@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
 import { theme } from '@/theme/tokens';
+import { useNames } from '@/features/account/account';
 import { Text } from '@/ui/Text';
 
 // The partner avatar doubles as a drop target: drag a deal onto Meera to trade it to her.
@@ -49,6 +50,7 @@ export function isOver(rect: Rect, x: number, y: number) {
 /** Wraps the partner avatar: measures it and reacts to drags. */
 export function PartnerDropZone({ children }: { children: ReactNode }) {
   const { rect, ready, hot, caught } = useTradeTarget();
+  const names = useNames();
   const ref = useRef<ComponentRef<typeof View>>(null);
   const measure = () => ref.current?.measureInWindow((x, y, w, h) => rect.set({ x, y, w, h }));
 
@@ -66,7 +68,7 @@ export function PartnerDropZone({ children }: { children: ReactNode }) {
       <Animated.View pointerEvents="none" style={[styles.ring, ring]} />
       <View ref={ref} onLayout={measure} collapsable={false}>{children}</View>
       <Animated.View pointerEvents="none" style={[styles.label, label]}>
-        <Text variant="label/md" color={theme.color.partner.b}>Hand it to Meera</Text>
+        <Text variant="label/md" color={theme.color.partner.b}>{`Hand it to ${names.partnerOr}`}</Text>
       </Animated.View>
     </Animated.View>
   );

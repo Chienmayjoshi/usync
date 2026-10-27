@@ -67,8 +67,8 @@ function effortOf(raw: string, bucket: Bucket): { effort: string; weight: number
   return { effort: '15 min', weight: 1 };
 }
 
-// Spoken filler that adds nothing to a card title.
-const FILLER = /\b(need to|have to|gotta|please|pls|karna hai|karni hai|karna|karni|hai|ko|ka|ki|ke)\b/gi;
+// Spoken filler and timing words: timing already shows as its own chip on the card.
+const FILLER = /\b(need to|have to|gotta|please|pls|karna hai|karni hai|karna|karni|hai|ko|ka|ki|ke|today|tomorrow|tonight|aaj|kal|parso|urgent|asap|jaldi)\b/gi;
 
 export function titleOf(raw: string): string {
   const cleaned = raw.replace(FILLER, ' ').replace(/\s+/g, ' ').trim();

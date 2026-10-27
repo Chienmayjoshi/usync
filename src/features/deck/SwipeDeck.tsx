@@ -13,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { useAccount } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
 import { theme, tones } from '@/theme/tokens';
@@ -83,10 +84,12 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
   const land = useSharedValue(0);
   const finger = useSharedValue({ x: 0, y: 0 });
   const target = useTradeTarget();
-  const hints = hintsFor(card);
+  const { partner } = useAccount();
+  const hints = hintsFor(card, !partner);
   const canUp = hints.up !== null;
+  const canLeft = hints.left !== null;
   // Only an untraded deal can be handed to Meera; after the one trade it goes to the table instead.
-  const canGive = card.status === 'deal' && !card.traded;
+  const canGive = !!partner && card.status === 'deal' && !card.traded;
 
   useEffect(() => {
     // Deal in: the new top card drops onto the deck like a dealt card.
@@ -143,7 +146,7 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
         target.hot.set(withSpring(hovering, motion.release));
         if (hovering) scheduleOnRN(haptics.trade);
       }
-      const past = !hovering && (Math.abs(e.translationX) > THRESHOLD || (canUp && e.translationY < -THRESHOLD)) ? 1 : 0;
+      const past = !hovering && (e.translationX > THRESHOLD || (canLeft && e.translationX < -THRESHOLD) || (canUp && e.translationY < -THRESHOLD)) ? 1 : 0;
       if (past !== armed.value) {
         armed.set(past);
         if (past) scheduleOnRN(haptics.tick);
@@ -161,7 +164,7 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
         return give();
       }
       if (e.translationX > THRESHOLD || e.velocityX > FLING) return fly('right');
-      if (e.translationX < -THRESHOLD || e.velocityX < -FLING) return fly('left');
+      if (canLeft && (e.translationX < -THRESHOLD || e.velocityX < -FLING)) return fly('left');
       if (canUp && (e.translationY < -THRESHOLD || e.velocityY < -FLING)) return fly('up');
       tx.set(withSpring(0, motion.cardBack));
       ty.set(withSpring(0, motion.cardBack));
@@ -212,7 +215,7 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
     return 1 - Math.max(over.value, land.value);
   };
   const rightStamp = useAnimatedStyle(() => ({ opacity: calm() * interpolate(tx.value, [20, THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
-  const leftStamp = useAnimatedStyle(() => ({ opacity: calm() * interpolate(tx.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
+  const leftStamp = useAnimatedStyle(() => ({ opacity: !canLeft ? 0 : calm() * interpolate(tx.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
   const upStamp = useAnimatedStyle(() => ({ opacity: canUp ? calm() * interpolate(ty.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) : 0 }));
 
   const accent = tones[toneFor(card)].accent;
@@ -222,7 +225,7 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
       <Animated.View
         style={[styles.top, cardStyle]}
         onLayout={(e) => cardH.set(e.nativeEvent.layout.height)}
-        accessibilityHint={`Swipe right, left or up.${canGive ? ' Drag onto Meera to hand it over.' : ''} Tap to flip. Hold to update.`}
+        accessibilityHint={`Swipe right, left or up.${canGive ? ' Drag onto your partner to hand it over.' : ''} Tap to flip. Hold to update.`}
       >
         <DealCard card={card} flip={flip} />
         <Animated.View style={[styles.stamp, styles.stampRight, { borderColor: accent }, rightStamp]} pointerEvents="none">

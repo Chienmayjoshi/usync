@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { interpolate, type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
+import { useAccount } from '@/features/account/account';
 import { theme, type Tone, tones } from '@/theme/tokens';
 import { Edges } from '@/ui/Edges';
 import { Text } from '@/ui/Text';
@@ -17,8 +18,10 @@ export function toneFor(card: Card): Tone {
   return 'ember';
 }
 
-export function hintsFor(card: Card) {
+/** Swipe hints per card. Solo (partner not joined yet) a deal can only be taken. */
+export function hintsFor(card: Card, solo = false): { left: string | null; up: string | null; right: string } {
   if (card.status === 'active') return { left: 'later', up: null, right: 'done' };
+  if (solo) return { left: null, up: null, right: 'take it' };
   return { left: card.traded ? 'to the table' : 'trade', up: 'together', right: 'take it' };
 }
 
@@ -28,7 +31,7 @@ type Props = { card: Card; flip: SharedValue<number>; minHeight?: number };
 export function DealCard({ card, flip, minHeight = 260 }: Props) {
   const [size, setSize] = useState({ w: 0, h: 0 });
   const tone = tones[toneFor(card)];
-  const hints = hintsFor(card);
+  const hints = hintsFor(card, !useAccount().partner);
 
   const front = useAnimatedStyle(() => ({
     transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }],
@@ -60,7 +63,7 @@ export function DealCard({ card, flip, minHeight = 260 }: Props) {
         </View>
         <View style={styles.spacer} />
         <View style={styles.hints}>
-          <Text variant="caption" color={theme.color.text.muted}>{`← ${hints.left}`}</Text>
+          {hints.left ? <Text variant="caption" color={theme.color.text.muted}>{`← ${hints.left}`}</Text> : <View />}
           {hints.up && <Text variant="caption" color={theme.color.text.muted}>{`↑ ${hints.up}`}</Text>}
           <Text variant="caption" color={theme.color.text.muted}>{`${hints.right} →`}</Text>
         </View>

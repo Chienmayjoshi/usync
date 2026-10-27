@@ -51,7 +51,7 @@ describe('splitDrop', () => {
 
   it('turns one dictated line into sorted cards with clean titles', () => {
     const cards = sortDrop('kal electrician ko bulana hai aur parcel return karna hai');
-    expect(cards.map((c) => c.title)).toEqual(['Kal electrician bulana', 'Parcel return']);
+    expect(cards.map((c) => c.title)).toEqual(['Electrician bulana', 'Parcel return']);
     expect(cards.map((c) => c.bucket)).toEqual(['Home', 'Errands']);
   });
 });

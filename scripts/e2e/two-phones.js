@@ -1,0 +1,56 @@
+const { chromium } = require('playwright-core');
+const out = process.argv[2];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+(async () => {
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } });
+  const mk = async (tag) => {
+    const ctx = await b.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 1.5, ignoreHTTPSErrors: true });
+    const p = await ctx.newPage();
+    p.on('pageerror', (e) => console.log(tag, 'PAGEERROR', String(e).slice(0, 200)));
+    p.on('console', (m) => { if (m.type() === 'error') console.log(tag, 'CONSOLE', m.text().slice(0, 200)); });
+    await p.goto('http://localhost:8133/', { waitUntil: 'networkidle' });
+    return p;
+  };
+  const shot = (p, n) => p.screenshot({ path: `${out}/${n}.png` });
+  const signIn = async (p, email, name) => {
+    await p.getByText('I already have an account').click();
+    await p.getByPlaceholder('you@example.com').fill(email);
+    await p.getByPlaceholder('6 characters or more').fill('usync-test-1');
+    await p.getByText('Sign in', { exact: true }).click();
+    await p.getByPlaceholder('Rahul').waitFor({ timeout: 15000 });
+    await p.getByPlaceholder('Rahul').fill(name);
+    await p.getByText('Continue', { exact: true }).click();
+    await p.getByText('Start our space').waitFor({ timeout: 15000 });
+  };
+  const r = await mk('R');
+  await shot(r, 'e0-signin');
+  await signIn(r, 'test-r@usync.dev', 'Rahul');
+  await shot(r, 'e1-pair');
+  await r.getByText('Start our space').click();
+  await r.getByText('Invite your person').waitFor({ timeout: 15000 });
+  await sleep(800);
+  await shot(r, 'e2-solo-deck');
+  const code = (await r.locator('text=/^[A-HJ-NP-Z2-9]{6}$/').first().innerText()).trim();
+  console.log('code', code);
+  const m = await mk('M');
+  await signIn(m, 'test-m@usync.dev', 'Meera');
+  await m.getByPlaceholder('K7Q2MX').fill(code);
+  await m.getByText('Join with code').click();
+  await m.getByText('Drop it', { exact: true }).first().waitFor({ timeout: 15000 });
+  await sleep(2500);
+  await shot(r, 'e3-r-after-join');
+  // Rahul drops one dictated line with two jobs.
+  await r.getByText('Drop it', { exact: true }).first().click();
+  await r.locator('textarea').fill('kal electrician ko bulana hai aur amazon parcel return karna hai');
+  await r.getByText('Drop it', { exact: true }).last().click();
+  await sleep(4500);
+  await shot(r, 'e4-r-after-drop');
+  await shot(m, 'e5-m-live');
+  // Meera takes her top card by swiping right.
+  await m.mouse.move(140, 360); await m.mouse.down();
+  for (let i = 1; i <= 20; i++) { await m.mouse.move(140 + 14 * i, 360); await sleep(16); }
+  await m.mouse.up(); await sleep(3000);
+  await shot(m, 'e6-m-took');
+  await shot(r, 'e7-r-sees');
+  await b.close();
+})().catch((e) => { console.log('FAILED', e.message.split('\n')[0]); process.exit(1); });
