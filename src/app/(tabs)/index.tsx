@@ -5,6 +5,7 @@ import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { type Card, balanceTilt, laterCount, myDeck, partnerCards, waitingCards } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { type SwipeDir, SwipeDeck } from '@/features/deck/SwipeDeck';
+import { PartnerDropZone } from '@/features/deck/tradeTarget';
 import { useOpenDrop } from '@/features/drop/DropSheet';
 import { haptics } from '@/theme/haptics';
 import { theme } from '@/theme/tokens';
@@ -70,7 +71,7 @@ export default function DeckScreen() {
   const later = laterCount(state);
 
   return (
-    <Screen kicker="Tuesday  ·  morning hand" title="Your deck" scroll={false}>
+    <Screen kicker="Tuesday  ·  morning hand" title="Your deck" scroll={false} wrapPartner={(n) => <PartnerDropZone>{n}</PartnerDropZone>}>
       <View style={styles.week}>
         <Seesaw tilt={tilt} scale={0.36} />
         <View style={styles.flex}>

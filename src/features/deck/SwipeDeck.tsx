@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { type ComponentRef, useEffect, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { GestureDetector, useCompetingGestures, useLongPressGesture, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -20,6 +20,7 @@ import { Text } from '@/ui/Text';
 
 import { CARD_DEPTH, DealCard, hintsFor, toneFor } from './DealCard';
 import type { Card } from './model';
+import { catchBounce, isOver, useTradeTarget } from './tradeTarget';
 
 export type SwipeDir = 'left' | 'right' | 'up';
 
@@ -31,17 +32,24 @@ type Props = {
 
 const THRESHOLD = 110;
 const FLING = 900;
+const LAND = { duration: 260 };
+
+type Origin = { x: number; y: number; w: number };
 
 /** The deck: only the top card is live; up to two cards peek out behind it. */
 export function SwipeDeck({ cards, onSwipe, onHold }: Props) {
   const progress = useSharedValue(0);
+  // The deck's window position, so a card dropped on the partner avatar can fly into it.
+  const origin = useSharedValue<Origin>({ x: 0, y: 0, w: 0 });
+  const ref = useRef<ComponentRef<typeof View>>(null);
+  const measure = () => ref.current?.measureInWindow((x, y, w) => origin.set({ x, y, w }));
   const [top, ...rest] = cards;
   return (
-    <View style={styles.deck}>
+    <View ref={ref} onLayout={measure} collapsable={false} style={styles.deck}>
       {rest.slice(0, 2).reverse().map((c, i, arr) => (
         <BehindCard key={c.id} card={c} level={arr.length - i} progress={progress} />
       ))}
-      {top && <TopCard key={`${top.id}:${top.story.length}`} card={top} progress={progress} onSwipe={onSwipe} onHold={onHold} />}
+      {top && <TopCard key={`${top.id}:${top.story.length}`} card={top} progress={progress} origin={origin} onSwipe={onSwipe} onHold={onHold} />}
     </View>
   );
 }
@@ -62,14 +70,23 @@ function BehindCard({ card, level, progress }: { card: Card; level: number; prog
   );
 }
 
-function TopCard({ card, progress, onSwipe, onHold }: { card: Card; progress: SharedValue<number>; onSwipe: Props['onSwipe']; onHold: Props['onHold'] }) {
+type TopProps = { card: Card; progress: SharedValue<number>; origin: SharedValue<Origin>; onSwipe: Props['onSwipe']; onHold: Props['onHold'] };
+
+function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
   const tx = useSharedValue(0);
   const ty = useSharedValue(-60);
   const enter = useSharedValue(0);
   const flip = useSharedValue(0);
   const armed = useSharedValue(0);
+  const cardH = useSharedValue(0);
+  const over = useSharedValue(0);
+  const land = useSharedValue(0);
+  const finger = useSharedValue({ x: 0, y: 0 });
+  const target = useTradeTarget();
   const hints = hintsFor(card);
   const canUp = hints.up !== null;
+  // Only an untraded deal can be handed to Meera; after the one trade it goes to the table instead.
+  const canGive = card.status === 'deal' && !card.traded;
 
   useEffect(() => {
     // Deal in: the new top card drops onto the deck like a dealt card.
@@ -90,23 +107,59 @@ function TopCard({ card, progress, onSwipe, onHold }: { card: Card; progress: Sh
     }));
   };
 
+  const give = () => {
+    'worklet';
+    // Fly the card's center into the avatar, shrinking as it goes, then the avatar catches it.
+    const r = target.rect.value;
+    const o = origin.value;
+    progress.set(withTiming(1, LAND));
+    tx.set(withTiming(r.x + r.w / 2 - (o.x + o.w / 2), LAND));
+    ty.set(withTiming(r.y + r.h / 2 - (o.y + cardH.value / 2), LAND));
+    land.set(withTiming(1, LAND, (done) => {
+      if (!done) return;
+      catchBounce(target.caught);
+      target.hot.set(withTiming(0, { duration: 200 }));
+      scheduleOnRN(haptics.success);
+      scheduleOnRN(finish, 'left');
+    }));
+  };
+
   const pan = usePanGesture({
     activeOffsetX: [-8, 8],
     activeOffsetY: [-8, 8],
+    onActivate: () => {
+      'worklet';
+      if (canGive) target.ready.set(withTiming(1, { duration: 160 }));
+    },
     onUpdate: (e) => {
       'worklet';
       tx.set(e.translationX);
       ty.set(e.translationY);
       progress.set(Math.min(1, Math.hypot(e.translationX, e.translationY) / 220));
-      const over = Math.abs(e.translationX) > THRESHOLD || (canUp && e.translationY < -THRESHOLD) ? 1 : 0;
-      if (over !== armed.value) {
-        armed.set(over);
-        if (over) scheduleOnRN(haptics.tick);
+      finger.set({ x: e.absoluteX, y: e.absoluteY });
+      const hovering = canGive && isOver(target.rect.value, e.absoluteX, e.absoluteY) ? 1 : 0;
+      if (hovering !== over.value) {
+        over.set(hovering);
+        target.hot.set(withSpring(hovering, motion.release));
+        if (hovering) scheduleOnRN(haptics.trade);
       }
+      const past = !hovering && (Math.abs(e.translationX) > THRESHOLD || (canUp && e.translationY < -THRESHOLD)) ? 1 : 0;
+      if (past !== armed.value) {
+        armed.set(past);
+        if (past) scheduleOnRN(haptics.tick);
+      }
+    },
+    onFinalize: () => {
+      'worklet';
+      target.ready.set(withTiming(0, { duration: 160 }));
     },
     onDeactivate: (e) => {
       'worklet';
       armed.set(0);
+      if (over.value) {
+        over.set(0);
+        return give();
+      }
       if (e.translationX > THRESHOLD || e.velocityX > FLING) return fly('right');
       if (e.translationX < -THRESHOLD || e.velocityX < -FLING) return fly('left');
       if (canUp && (e.translationY < -THRESHOLD || e.velocityY < -FLING)) return fly('up');
@@ -134,19 +187,43 @@ function TopCard({ card, progress, onSwipe, onHold }: { card: Card; progress: Sh
 
   const gesture = useCompetingGestures(pan, hold, tap);
 
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: enter.value,
-    transform: [{ translateX: tx.value }, { translateY: ty.value }, { rotate: `${tx.value / 18}deg` }],
-  }));
-  const rightStamp = useAnimatedStyle(() => ({ opacity: interpolate(tx.value, [20, THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
-  const leftStamp = useAnimatedStyle(() => ({ opacity: interpolate(tx.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
-  const upStamp = useAnimatedStyle(() => ({ opacity: canUp ? interpolate(ty.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) : 0 }));
+  const cardStyle = useAnimatedStyle(() => {
+    // Over the avatar the card shrinks and straightens, like a card being handed over.
+    // It also hangs below and left of the finger so Meera's avatar stays in view.
+    const hot = over.value || land.value ? target.hot.value : 0;
+    const lift = hot * (1 - land.value);
+    const o = origin.value;
+    const cx = o.x + o.w / 2 + tx.value;
+    const cy = o.y + cardH.value / 2 + ty.value;
+    const scale = (1 - hot * 0.62) * (1 - land.value * 0.9);
+    return {
+      opacity: enter.value * (1 - land.value * 0.6),
+      transform: [
+        { translateX: tx.value + (finger.value.x - 90 - cx) * lift },
+        { translateY: ty.value + (finger.value.y + 90 - cy) * lift },
+        { rotate: `${(tx.value / 18) * (1 - hot)}deg` },
+        { scale },
+      ],
+    };
+  });
+  // Direction stamps step aside while the card hovers over the avatar.
+  const calm = () => {
+    'worklet';
+    return 1 - Math.max(over.value, land.value);
+  };
+  const rightStamp = useAnimatedStyle(() => ({ opacity: calm() * interpolate(tx.value, [20, THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
+  const leftStamp = useAnimatedStyle(() => ({ opacity: calm() * interpolate(tx.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) }));
+  const upStamp = useAnimatedStyle(() => ({ opacity: canUp ? calm() * interpolate(ty.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) : 0 }));
 
   const accent = tones[toneFor(card)].accent;
 
   return (
     <GestureDetector gesture={gesture}>
-      <Animated.View style={[styles.top, cardStyle]} accessibilityHint="Swipe right, left or up. Tap to flip. Hold to update.">
+      <Animated.View
+        style={[styles.top, cardStyle]}
+        onLayout={(e) => cardH.set(e.nativeEvent.layout.height)}
+        accessibilityHint={`Swipe right, left or up.${canGive ? ' Drag onto Meera to hand it over.' : ''} Tap to flip. Hold to update.`}
+      >
         <DealCard card={card} flip={flip} />
         <Animated.View style={[styles.stamp, styles.stampRight, { borderColor: accent }, rightStamp]} pointerEvents="none">
           <Text variant="label/md" color={accent}>{hints.right}</Text>

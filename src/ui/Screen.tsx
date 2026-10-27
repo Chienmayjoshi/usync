@@ -7,7 +7,9 @@ import { theme } from '@/theme/tokens';
 import { AvatarPair } from './AvatarPair';
 import { Text } from './Text';
 
-export function Screen({ kicker, title, children, scroll = true }: { kicker: string; title: string; children: ReactNode; scroll?: boolean }) {
+type Props = { kicker: string; title: string; children: ReactNode; scroll?: boolean; wrapPartner?: (node: ReactNode) => ReactNode };
+
+export function Screen({ kicker, title, children, scroll = true, wrapPartner }: Props) {
   const insets = useSafeAreaInsets();
   const header = (
     <View style={styles.header}>
@@ -15,7 +17,7 @@ export function Screen({ kicker, title, children, scroll = true }: { kicker: str
         <Text variant="label/md" color={theme.color.text.muted}>{kicker}</Text>
         <Text variant="title/lg">{title}</Text>
       </View>
-      <AvatarPair />
+      <AvatarPair wrapPartner={wrapPartner} />
     </View>
   );
   if (!scroll) {
