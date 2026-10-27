@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { forgetPush } from '@/lib/notifications';
 import { type MemberRow, supabase } from '@/lib/supabase';
 
 type Account = {
@@ -76,6 +77,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
     },
     async signOut() {
+      await forgetPush().catch(() => undefined);
       await supabase.auth.signOut();
       setMembers(null);
     },

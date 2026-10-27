@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 
 import { useAccount } from '@/features/account/account';
 import { supabase } from '@/lib/supabase';
@@ -19,14 +19,16 @@ export function useSync() {
     setEntries((data ?? []) as SyncEntry[]);
   }, [coupleId]);
 
+  // Us and Sync both use this hook; same named channels would collide in supabase-js.
+  const instance = useId();
   useEffect(() => {
     if (!coupleId) return;
     Promise.resolve().then(load).catch(() => undefined);
-    const ch = supabase.channel(`sync-${coupleId}`)
+    const ch = supabase.channel(`sync-${coupleId}-${instance}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_entries', filter: `couple_id=eq.${coupleId}` }, () => { load().catch(() => undefined); })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [coupleId, load]);
+  }, [coupleId, load, instance]);
 
   const week = weekStart();
   const mine = entries.find((e) => e.member === me?.id && e.week_start === week) ?? null;

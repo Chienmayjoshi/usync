@@ -35,7 +35,26 @@
           "imageWidth": 120,
           "backgroundColor": "#0B0A0F"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F5C451",
+          "defaultChannel": "default"
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a0cb731d-fe18-45b9-a6e8-adb2a2b419cd"
+      }
+    },
+    "owner": "chienmayjoshis-team",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a0cb731d-fe18-45b9-a6e8-adb2a2b419cd"
+    }
   }
 }

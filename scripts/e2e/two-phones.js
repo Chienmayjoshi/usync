@@ -1,8 +1,9 @@
-const { chromium } = require('playwright-core');
+// Cloud containers ship playwright with a matching Chromium; older ones only had playwright-core.
+const { chromium } = (() => { try { return require('playwright'); } catch { return require('playwright-core'); } })();
 const out = process.argv[2];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } });
+  const b = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY, bypass: 'localhost,127.0.0.1' } });
   const mk = async (tag) => {
     const ctx = await b.newContext({ viewport: { width: 402, height: 874 }, deviceScaleFactor: 1.5, ignoreHTTPSErrors: true });
     const p = await ctx.newPage();

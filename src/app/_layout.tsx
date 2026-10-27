@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AccountProvider, useAccount } from '@/features/account/account';
 import { DeckProvider } from '@/features/deck/store';
+import { NotificationsBridge } from '@/features/notify/NotificationsBridge';
 import { theme } from '@/theme/tokens';
 import { ToastHost } from '@/ui/Toast';
 
@@ -33,6 +34,7 @@ export default function RootLayout() {
             <DeckProvider>
               <StatusBar style="light" />
               <Routes />
+              <NotificationsBridge />
             </DeckProvider>
           </AccountProvider>
         </ToastHost>

@@ -80,6 +80,8 @@ The laptop path replaces 0c step 3 (no EAS needed). Blocker is still the 403 pus
 Context: Chinmay wants the MVP finished and tested with real scenarios on real phones before any more aesthetics. Polish (plate titles, art, motion tuning) is frozen until M5.
 
 ### Where we are
+Oct 27 update 3: M3 built and verified server side. Budget lives in Postgres (`0003_m3.sql`): a pg_cron tick every 10 minutes queues new hands (09:00 and 18:00 local, max 2 a day, never your own drops) and nudges (one card untouched 3+ days, max 2 a day, 4h apart, 10:00 to 20:00), triggers queue thanks and the Sync reveal immediately, quiet hours (22:00 to 08:00, per member `tz`) hold everything, and pg_net posts straight to Expo's push API. No edge function needed. Verified: `scripts/e2e/push-check.sql` (all four kinds, budget holds on a second tick, quiet hold to 08:00, dead tokens pruned from Expo's DeviceNotRegistered answer, RLS) and the two phone web e2e. App registers its token after pairing; phones without push (Expo Go on Android, web) get the same messages as in app banners on open. EAS project `@chienmayjoshis-team/usync` linked, EAS Update configured (channel `preview`). Blocked on Chinmay: Firebase for Android push (steps below), then one preview APK build. iPhone gets push inside Expo Go.
+
 Oct 27 update 2: M4 done and verified end to end (hold to update with waiting detection, waiting list on Us with Back on track / Done, thanks hearts delivered live, Sunday Sync replay + sealed appreciations + next hand, weeks in sync, leave space, delete account). Remaining: M3 notifications (needs EXPO_TOKEN as an environment variable and expo.dev, api.expo.dev, u.expo.dev, exp.host allowed), then M5 real test.
 
 Oct 27 update: M1 core is built and verified end to end on the web build against the real Supabase project (sign in, name, start or join a space by code, live shared deck, fairness dealing, server enforced moves with undo). Supabase has `Confirm email` on until Chinmay turns it off. Next: EAS Update link (needs Expo token) or laptop testing, then M2/M3.
@@ -115,6 +117,7 @@ Testing must cost nothing. Every service below is on a free tier; no Apple Devel
 2. Create a free Expo account, add a token as `EXPO_TOKEN` in environment secrets, allow `expo.dev`, `api.expo.dev`, `u.expo.dev`.
 3. Install Expo Go on both phones (already done if you tested Sprint 1).
 4. After each milestone: open the Expo Go link I send (no laptop needed), run the milestone checklist, report bugs.
+5. Android push (M3, free): in the Firebase console create a project, add an Android app with package `com.usync.app`, download `google-services.json` and send it to me (it is a client config, safe to commit). Then Project settings → Service accounts → Generate new private key, and upload that JSON at expo.dev → usync → Credentials → Android → FCM V1 service account key (keep this one private, never commit it). I then add `android.googleServicesFile` and run one `preview` APK build.
 
 Verification per milestone: tsc, lint, jest (reducer, fairness, sorter on ~30 real English/Hinglish lines), SQL checks that one couple cannot read another, then the two phone check.
 
