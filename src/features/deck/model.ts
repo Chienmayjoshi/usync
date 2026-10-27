@@ -1,7 +1,9 @@
 // Deck domain model: pure state + reducer, no React. Mirrors the core loop in the plan:
 // a dealt card can be taken, traded once (then it goes to the open table), or done together.
 
-export type Bucket = 'Home' | 'Admin' | 'Errands' | 'Family' | 'Us';
+import { type Bucket, sortLine } from '@/lib/sorter';
+
+export type { Bucket };
 export type Owner = 'me' | 'partner' | 'together' | 'table';
 export type Status = 'deal' | 'active' | 'waiting' | 'done';
 
@@ -146,40 +148,24 @@ export function balanceTilt(s: DeckState): number {
   return Math.max(-1, Math.min(1, (partner - me) / total));
 }
 
-// Fake sort for the Sprint 1 demo. The real one is the Claude Haiku edge function.
-const BUCKET_WORDS: [Bucket, RegExp][] = [
-  ['Us', /\b(trip|goa|dinner|date|anniversary|gift|holiday|movie)\b/i],
-  ['Family', /\b(mom|mum|dad|parents|in[- ]?laws|wedding|birthday|nani|dadi|cousin)\b/i],
-  ['Admin', /\b(bill|renew|insurance|passport|rent|tax|bank|kyc|agreement|license)\b/i],
-  ['Home', /\b(electrician|plumber|fix|repair|light|ac|wifi|router|leak|tap|paint|carpenter)\b/i],
-  ['Errands', /\b(return|parcel|pick ?up|buy|grocer|courier|order|collect)\b/i],
-];
-
-export function splitDrop(text: string): string[] {
-  return text
-    .split(/,|\n|\band\b|\baur\b|\bphir\b/i)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 1);
-}
+export { splitDrop } from '@/lib/sorter';
 
 let seq = 0;
+/** Local card from one line, using the free rule sorter. The backend version stores the same fields. */
 export function fakeSort(raw: string): Card {
-  const bucket = BUCKET_WORDS.find(([, re]) => re.test(raw))?.[0] ?? 'Errands';
-  const effort = /\b(call|phone|bulana)\b/i.test(raw) ? '15 min call' : bucket === 'Admin' ? '5 min' : bucket === 'Us' ? '30 min' : '10 min';
-  const when = /\b(today|aaj)\b/i.test(raw) ? 'today' : /\b(tomorrow|kal)\b/i.test(raw) ? 'tomorrow' : /\b(sat|saturday|sun|sunday|weekend)\b/i.test(raw) ? 'by the weekend' : 'this week';
-  const title = raw.charAt(0).toUpperCase() + raw.slice(1);
+  const s = sortLine(raw);
   seq += 1;
   return {
     id: `drop-${Date.now()}-${seq}`,
-    title,
-    bucket,
-    effort,
-    when,
+    title: s.title,
+    bucket: s.bucket,
+    effort: s.effort,
+    when: s.when,
     detail: 'Dropped just now. Dealt to you for this demo; with Meera paired it goes into tonight’s hand.',
-    owner: 'me',
+    owner: s.together ? 'together' : 'me',
     status: 'deal',
     traded: false,
-    weight: effort === '30 min' ? 3 : effort === '15 min call' ? 2 : 1,
+    weight: s.weight,
     story: ['You dropped it'],
   };
 }

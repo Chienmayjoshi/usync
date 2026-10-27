@@ -91,7 +91,7 @@ describe('drop parsing', () => {
   });
   it('guesses bucket, effort and timing without asking anything', () => {
     expect(fakeSort('kal electrician ko bulana hai')).toMatchObject({ bucket: 'Home', effort: '15 min call', when: 'tomorrow' });
-    expect(fakeSort('renew car insurance')).toMatchObject({ bucket: 'Admin', effort: '5 min' });
+    expect(fakeSort('renew car insurance')).toMatchObject({ bucket: 'Admin', effort: '10 min' });
     expect(fakeSort('plan the goa trip')).toMatchObject({ bucket: 'Us' });
   });
 });
