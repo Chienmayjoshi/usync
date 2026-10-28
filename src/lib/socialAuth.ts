@@ -3,23 +3,18 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
-import { SUPABASE_KEY, SUPABASE_URL, supabase } from './supabase';
+import { supabase } from './supabase';
 
 // Apple and Google sign in. Apple is native (iOS only) and hands Supabase an ID token; Google
 // goes through Supabase's hosted OAuth page in an in app browser and comes back on a deep link.
 // Both only show once the provider is switched on in Supabase, so nobody hits a dead button.
+// This module loads native modules at import, so it is only ever imported lazily (see
+// authProviders.ts): builds made before it existed must not crash at launch.
 
 WebBrowser.maybeCompleteAuthSession();
 
-export type Providers = { apple: boolean; google: boolean };
-
-/** Which providers the Supabase project has switched on (a public endpoint). */
-export async function enabledProviders(): Promise<Providers> {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_KEY } });
-  const json = (await res.json()) as { external?: Record<string, boolean> };
-  const appleHere = Platform.OS === 'ios' && (await AppleAuthentication.isAvailableAsync().catch(() => false));
-  return { apple: !!json.external?.apple && appleHere, google: !!json.external?.google };
-}
+/** Apple sign in exists only on iOS 13+. */
+export const appleAvailable = () => Platform.OS === 'ios' && AppleAuthentication.isAvailableAsync().catch(() => false);
 
 const cancelled = (e: unknown) => !!e && typeof e === 'object' && 'code' in e && e.code === 'ERR_REQUEST_CANCELED';
 

@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { enabledProviders, type Providers, signInWithApple, signInWithGoogle } from '@/lib/socialAuth';
+import { enabledProviders, type Providers, socialAuth } from '@/lib/authProviders';
 import { errorText } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
 import { type PersonColor, theme } from '@/theme/tokens';
@@ -58,10 +58,10 @@ export function SignInStep() {
   return (
     <Step kicker="usync" title={mode === 'new' ? 'Share the load, not the nagging.' : 'Welcome back.'} body="usync works with two. Start now, invite your person after.">
       {providers.apple && (
-        <PopButton label="Continue with Apple" icon={AppleLogo} tone="cream" disabled={busy} onPress={() => run(async () => { appleName = await signInWithApple(); })} />
+        <PopButton label="Continue with Apple" icon={AppleLogo} tone="cream" disabled={busy} onPress={() => run(async () => { appleName = await (await socialAuth()).signInWithApple(); })} />
       )}
       {providers.google && (
-        <PopButton label="Continue with Google" icon={GoogleLogo} tone="cream" disabled={busy} onPress={() => run(signInWithGoogle)} />
+        <PopButton label="Continue with Google" icon={GoogleLogo} tone="cream" disabled={busy} onPress={() => run(async () => (await socialAuth()).signInWithGoogle())} />
       )}
       {(providers.apple || providers.google) && <View style={styles.or}><Text variant="label/md" color={theme.color.text.muted}>or with email</Text></View>}
       <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" />
