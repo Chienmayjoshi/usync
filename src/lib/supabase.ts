@@ -2,9 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
+import type { PersonColor } from '@/theme/tokens';
+
 // The publishable key is meant to ship inside the app; row level security protects the data.
 export const SUPABASE_URL = 'https://sylmsididyxunxxorydz.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_8YDvnj6fDHcTcQw5L6ubAg_I6cQopWk';
+export const SUPABASE_KEY = 'sb_publishable_8YDvnj6fDHcTcQw5L6ubAg_I6cQopWk';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
@@ -20,7 +22,7 @@ if (Platform.OS !== 'web') {
 
 export type Side = 'a' | 'b';
 
-export type MemberRow = { id: string; couple_id: string | null; side: Side | null; name: string };
+export type MemberRow = { id: string; couple_id: string | null; side: Side | null; name: string; color: PersonColor; avatar: string | null };
 
 export type TaskRow = {
   id: string;
@@ -42,6 +44,8 @@ export type TaskRow = {
   sort_at: string;
   created_at: string;
 };
+
+export type ThanksRow = { id: number; task_id: string | null; from_member: string; note: string | null; seen_at: string | null; at: string };
 
 export type EventRow = { id: number; task_id: string; actor: string | null; kind: string; text: string; at: string };
 

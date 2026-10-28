@@ -2,7 +2,6 @@ import { type ComponentRef, createContext, type ReactNode, useContext, useRef } 
 import { StyleSheet, View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from 'react-native-reanimated';
 
-import { theme } from '@/theme/tokens';
 import { useNames } from '@/features/account/account';
 import { Text } from '@/ui/Text';
 
@@ -65,10 +64,10 @@ export function PartnerDropZone({ children }: { children: ReactNode }) {
 
   return (
     <Animated.View style={[styles.zone, style]}>
-      <Animated.View pointerEvents="none" style={[styles.ring, ring]} />
+      <Animated.View pointerEvents="none" style={[styles.ring, { borderColor: names.hex.partner }, ring]} />
       <View ref={ref} onLayout={measure} collapsable={false}>{children}</View>
       <Animated.View pointerEvents="none" style={[styles.label, label]}>
-        <Text variant="label/md" color={theme.color.partner.b}>{`Hand it to ${names.partnerOr}`}</Text>
+        <Text variant="label/md" color={names.hex.partner}>{`Hand it to ${names.partnerOr}`}</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -82,5 +81,5 @@ export function catchBounce(caught: SharedValue<number>) {
 const styles = StyleSheet.create({
   zone: { zIndex: 2 },
   label: { position: 'absolute', top: 11, right: 62, width: 170, alignItems: 'flex-end' },
-  ring: { position: 'absolute', top: -6, left: -6, right: -6, bottom: -6, borderRadius: 999, borderWidth: 2, borderStyle: 'dashed', borderColor: theme.color.partner.b },
+  ring: { position: 'absolute', top: -6, left: -6, right: -6, bottom: -6, borderRadius: 999, borderWidth: 2, borderStyle: 'dashed' },
 });

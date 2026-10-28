@@ -1,12 +1,11 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { ArrowsClockwise, Cards, type Icon, Intersect, Plus } from 'phosphor-react-native';
+import { ArrowsClockwise, Cards, type Icon, Intersect } from 'phosphor-react-native';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { useOpenDrop } from '@/features/drop/DropSheet';
+import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
 import { theme } from '@/theme/tokens';
 
-import { PopButton } from './PopButton';
 import { Text } from './Text';
 
 const ICONS: Record<string, { icon: Icon; label: string }> = {
@@ -15,16 +14,12 @@ const ICONS: Record<string, { icon: Icon; label: string }> = {
   sync: { icon: ArrowsClockwise, label: 'Sync' },
 };
 
-/** Three tabs only, with the Drop button floating above. The active bar uses the viewer's color. */
-export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
-  const openDrop = useOpenDrop();
+/** Three tabs. The active bar uses the viewer's own color. Drop floats above it (DropFab). */
+export function TabBar({ state, navigateToTab, insets, onHeight }: BottomTabBarProps & { onHeight?: (h: number) => void }) {
+  const names = useNames();
   return (
-    <View pointerEvents="box-none">
-      <View style={styles.drop} pointerEvents="box-none">
-        <PopButton label="Drop it" icon={Plus} tone="cream" onPress={openDrop} style={styles.dropBtn} />
-        <Text variant="caption" color={theme.color.text.muted}>tap to type</Text>
-      </View>
-      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+    <View>
+      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]} onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}>
         {state.routes.map((r, i) => {
           const meta = ICONS[r.name];
           if (!meta) return null;
@@ -42,7 +37,7 @@ export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
             >
               <IconCmp size={24} color={color} weight={active ? 'bold' : 'regular'} />
               <Text variant="label/md" color={color}>{meta.label}</Text>
-              <View style={[styles.activeBar, { opacity: active ? 1 : 0 }]} />
+              <View style={[styles.activeBar, { opacity: active ? 1 : 0, backgroundColor: names.hex.me }]} />
             </Pressable>
           );
         })}
@@ -52,9 +47,7 @@ export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
 }
 
 const styles = StyleSheet.create({
-  drop: { alignItems: 'center', gap: 4, paddingBottom: 10 },
-  dropBtn: { minWidth: 184 },
   bar: { flexDirection: 'row', backgroundColor: theme.color.bg.surface, borderTopWidth: 1, borderTopColor: theme.color.border.subtle, paddingTop: 10 },
   tab: { flex: 1, alignItems: 'center', gap: 4, minHeight: 48 },
-  activeBar: { width: 20, height: 3, backgroundColor: theme.color.partner.a },
+  activeBar: { width: 20, height: 3 },
 });

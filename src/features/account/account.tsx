@@ -3,6 +3,9 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 
 import { forgetPush } from '@/lib/notifications';
 import { type MemberRow, supabase } from '@/lib/supabase';
+import { type PersonColor, tones } from '@/theme/tokens';
+
+export type Profile = { name: string; color: PersonColor; avatar: string | null };
 
 type Account = {
   /** undefined while the stored session loads. */
@@ -14,7 +17,7 @@ type Account = {
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  saveName: (name: string) => Promise<void>;
+  saveProfile: (p: Partial<Profile>) => Promise<void>;
   createSpace: () => Promise<void>;
   joinSpace: (code: string) => Promise<void>;
   leaveSpace: () => Promise<void>;
@@ -37,7 +40,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!uid) return;
-    const { data, error } = await supabase.from('members').select('id, couple_id, side, name');
+    const { data, error } = await supabase.from('members').select('id, couple_id, side, name, color, avatar');
     if (error) throw error;
     setMembers(data as MemberRow[]);
     const mine = (data as MemberRow[]).find((m) => m.id === uid);
@@ -81,11 +84,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
       setMembers(null);
     },
-    async saveName(name) {
-      const clean = name.trim();
+    async saveProfile(p) {
+      const patch = { ...p, ...(p.name !== undefined && { name: p.name.trim() }) };
       const { error } = me
-        ? await supabase.from('members').update({ name: clean }).eq('id', me.id)
-        : await supabase.from('members').insert({ id: uid, name: clean });
+        ? await supabase.from('members').update(patch).eq('id', me.id)
+        : await supabase.from('members').insert({ id: uid, ...patch });
       if (error) throw error;
       await refresh();
     },
@@ -121,14 +124,24 @@ export function useAccount() {
   return v;
 }
 
-/** Names for copy. Falls back gently before the partner joins. */
+/** The partner gets the other default color until they pick, and never the same as mine. */
+export function partnerColorFor(mine: PersonColor, theirs?: PersonColor | null): PersonColor {
+  if (theirs && theirs !== mine) return theirs;
+  return mine === 'lagoon' ? 'ember' : 'lagoon';
+}
+
+/** Names, colors and avatars for copy and UI. Falls back gently before the partner joins. */
 export function useNames() {
   const { me, partner } = useAccount();
   const initial = (n?: string) => (n ? n.trim().charAt(0).toUpperCase() : null);
+  const mine = me?.color ?? 'ember';
   return {
     me: me?.name ?? 'You',
     partner: partner?.name ?? null,
     partnerOr: partner?.name ?? 'your partner',
     initials: { a: initial(me?.name) ?? '?', b: initial(partner?.name) },
+    avatars: { a: me?.avatar ?? null, b: partner?.avatar ?? null },
+    colors: { me: mine, partner: partnerColorFor(mine, partner?.color) },
+    hex: { me: tones[mine].face, partner: tones[partnerColorFor(mine, partner?.color)].face },
   };
 }

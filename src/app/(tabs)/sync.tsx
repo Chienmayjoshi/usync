@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { useAccount, useNames } from '@/features/account/account';
-import { balanceTilt, tableCards } from '@/features/deck/model';
+import { HeaderAvatars } from '@/features/account/HeaderAvatars';
+import { useNames } from '@/features/account/account';
+import { balanceTilt, type Card, tableCards } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
+import { useMoves } from '@/features/deck/useMoves';
 import { useSync } from '@/features/sync/sync';
 import { errorText } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
@@ -12,63 +15,74 @@ import { Field } from '@/ui/Field';
 import { PopButton } from '@/ui/PopButton';
 import { Screen } from '@/ui/Screen';
 import { Seesaw } from '@/ui/Seesaw';
+import { Segmented } from '@/ui/Segmented';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
-// Sunday Sync, any day of the week for testing: replay what got done, one appreciation each
-// (sealed until both write), then the open table as next week's hand.
+type Step = 'replay' | 'appreciate' | 'next';
+const STEPS: { value: Step; label: string }[] = [
+  { value: 'replay', label: '1 Replay' },
+  { value: 'appreciate', label: '2 Thanks' },
+  { value: 'next', label: '3 Next' },
+];
+
+// Sunday Sync, any day of the week: replay what got done, one appreciation each (sealed until
+// both write), then the open table as next week's hand. One step on screen at a time.
 export default function SyncScreen() {
-  const { state, dispatch } = useDeck();
+  const { state } = useDeck();
   const names = useNames();
   const sync = useSync();
-  const weekStartMs = Date.parse(`${sync.week}T00:00:00`);
-  const done = state.cards.filter((c) => c.status === 'done' && c.doneAt && Date.parse(c.doneAt) >= weekStartMs);
-  const table = tableCards(state);
+  const [step, setStep] = useState<Step>('replay');
+  const at = STEPS.findIndex((s) => s.value === step);
+  const next = STEPS[at + 1];
 
   return (
-    <Screen kicker="Sunday sync  ·  this week" title="Your week" initials={names.initials}>
-      <View style={styles.center}><Seesaw tilt={balanceTilt(state)} scale={0.9} /></View>
+    <Screen kicker="Sunday sync  ·  this week" title="Your week" right={<HeaderAvatars />}>
+      <View style={styles.center}><Seesaw tilt={balanceTilt(state)} scale={0.7} colors={names.hex} /></View>
+      <Segmented value={step} onChange={setStep} options={STEPS} accent={theme.color.together.base} />
 
-      <Section label="1  ·  Replay">
-        {done.length === 0 ? (
-          <Text variant="body/lg" color={theme.color.text.secondary}>Nothing closed yet this week. That counts as a week too.</Text>
-        ) : done.map((c) => (
-          <View key={c.id} style={styles.row}>
-            <Text variant="label/md" color={c.owner === 'together' ? theme.color.together.base : c.doneBy === 'me' ? theme.color.partner.a : theme.color.partner.b}>
-              {c.owner === 'together' ? 'Both of you' : c.doneBy === 'me' ? names.me : names.partnerOr}
-            </Text>
-            <Text variant="title/md">{c.title}</Text>
-          </View>
-        ))}
-      </Section>
+      <Animated.View key={step} entering={FadeIn.duration(220)} style={styles.step}>
+        {step === 'replay' && <Replay week={sync.week} />}
+        {step === 'appreciate' && <Appreciate partner={names.partner} sync={sync} />}
+        {step === 'next' && <NextHand />}
+      </Animated.View>
 
-      <Section label="2  ·  Appreciate">
-        <Appreciate partner={names.partner} sync={sync} />
-      </Section>
-
-      <Section label="3  ·  Next hand">
-        {table.length === 0 ? (
-          <Text variant="body/md" color={theme.color.text.secondary}>The open table is clear. Nothing left hanging.</Text>
-        ) : table.map((c) => (
-          <View key={c.id} style={styles.row}>
-            <Text variant="title/md">{c.title}</Text>
-            <PopButton label="I’ll take it" tone="ghost" onPress={() => { haptics.take(); dispatch({ type: 'grab', id: c.id }); }} />
-          </View>
-        ))}
-      </Section>
-
-      <Text variant="caption" color={theme.color.text.muted}>{`${sync.weeks} ${sync.weeks === 1 ? 'week' : 'weeks'} in sync. A missed week pauses it, never resets it.`}</Text>
-
-      <AccountSection />
+      {next && <PopButton label={`Next: ${next.label.slice(2)}`} tone="ghost" onPress={() => { haptics.tick(); setStep(next.value); }} />}
+      <Text variant="caption" color={theme.color.text.muted} style={styles.centerText}>{`${sync.weeks} ${sync.weeks === 1 ? 'week' : 'weeks'} in sync. A missed week pauses it, never resets it.`}</Text>
     </Screen>
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+const SHOW = 4;
+
+/** The week's closed jobs, by who carried them. Long weeks fold, so the step stays one screen. */
+function Replay({ week }: { week: string }) {
+  const { state } = useDeck();
+  const names = useNames();
+  const [open, setOpen] = useState<string | null>(null);
+  const weekStartMs = Date.parse(`${week}T00:00:00`);
+  const done = state.cards.filter((c) => c.status === 'done' && c.doneAt && Date.parse(c.doneAt) >= weekStartMs);
+  if (done.length === 0) return <Text variant="body/lg" color={theme.color.text.secondary}>Nothing closed yet this week. That counts as a week too.</Text>;
+
+  const groups: { key: string; label: string; color: string; cards: Card[] }[] = [
+    { key: 'together', label: 'Both of you', color: theme.color.together.base, cards: done.filter((c) => c.owner === 'together') },
+    { key: 'partner', label: names.partnerOr, color: names.hex.partner, cards: done.filter((c) => c.owner !== 'together' && c.doneBy === 'partner') },
+    { key: 'me', label: names.me, color: names.hex.me, cards: done.filter((c) => c.owner !== 'together' && c.doneBy !== 'partner') },
+  ];
   return (
-    <View style={styles.section}>
-      <Text variant="label/md" color={theme.color.together.base}>{label}</Text>
-      {children}
+    <View style={styles.groups}>
+      {groups.filter((g) => g.cards.length).map((g) => {
+        const all = open === g.key;
+        return (
+          <View key={g.key} style={[styles.group, { borderLeftColor: g.color }]}>
+            <Text variant="label/md" color={g.color}>{g.label}</Text>
+            {(all ? g.cards : g.cards.slice(0, SHOW)).map((c) => <Text key={c.id} variant="title/md">{c.title}</Text>)}
+            {g.cards.length > SHOW && (
+              <PopButton label={all ? 'Fold' : 'Show all'} tone="ghost" onPress={() => setOpen(all ? null : g.key)} style={styles.fold} />
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -81,7 +95,7 @@ function Appreciate({ partner, sync }: { partner: string | null; sync: ReturnTyp
   if (sync.mine && sync.theirs) {
     return (
       <View style={styles.reveal}>
-        <Text variant="label/md" color={theme.color.partner.b}>{`${partner} noticed`}</Text>
+        <Text variant="label/md" color={theme.color.together.base}>{`${partner} noticed`}</Text>
         <Text variant="display/accent" style={styles.quote}>{`“${sync.theirs.appreciation}”`}</Text>
         <Text variant="caption" color={theme.color.text.muted}>{`You wrote: “${sync.mine.appreciation}”`}</Text>
       </View>
@@ -96,6 +110,7 @@ function Appreciate({ partner, sync }: { partner: string | null; sync: ReturnTyp
   };
   return (
     <View style={styles.form}>
+      <Text variant="body/md" color={theme.color.text.secondary}>{`The one thing from this week you want ${partner} to know you saw. Hearts for single jobs go out any day from Us.`}</Text>
       <Field label={`One thing ${partner} did this week`} value={text} onChangeText={setText} placeholder="Thanks for chasing the electrician" multiline maxLength={200} />
       <PopButton label={busy ? 'Sealing…' : 'Seal it'} tone="cream" disabled={!text.trim() || busy} onPress={save} />
       <Text variant="caption" color={theme.color.text.muted}>{`${partner} sees it only after writing theirs.`}</Text>
@@ -103,34 +118,34 @@ function Appreciate({ partner, sync }: { partner: string | null; sync: ReturnTyp
   );
 }
 
-function AccountSection() {
-  const { me, partner, inviteCode, signOut, leaveSpace, deleteAccount } = useAccount();
-  const toast = useToast();
-  const [confirm, setConfirm] = useState(false);
-  const fail = (e: unknown) => toast({ kind: 'info', title: 'That didn’t work', body: errorText(e) });
+function NextHand() {
+  const { state } = useDeck();
+  const move = useMoves();
+  const table = tableCards(state);
+  if (table.length === 0) return <Text variant="body/md" color={theme.color.text.secondary}>The open table is clear. Nothing left hanging.</Text>;
   return (
-    <View style={styles.account}>
-      <Text variant="label/md" color={theme.color.text.muted}>Account</Text>
-      <Text variant="body/md">{`${me?.name ?? ''}${partner ? ` with ${partner.name}` : '  ·  waiting for your partner'}`}</Text>
-      {inviteCode && <Text variant="body/md" color={theme.color.text.secondary}>{`Space code: ${inviteCode}`}</Text>}
-      <PopButton label="Sign out" tone="ghost" onPress={() => signOut().catch(fail)} />
-      <PopButton label="Leave this space" tone="ghost" onPress={() => leaveSpace().catch(fail)} />
-      <PopButton
-        label={confirm ? 'Tap again to delete everything of mine' : 'Delete my account'}
-        tone="ghost"
-        onPress={() => (confirm ? deleteAccount().catch(fail) : setConfirm(true))}
-      />
-      {confirm && <Text variant="caption" color={theme.color.text.muted}>Your account goes for good. Shared cards stay with your partner.</Text>}
+    <View style={styles.groups}>
+      <Text variant="body/md" color={theme.color.text.secondary}>Still on the open table. Pick what you’ll carry next week.</Text>
+      {table.map((c) => (
+        <View key={c.id} style={styles.nextRow}>
+          <Text variant="title/md" style={styles.flex}>{c.title}</Text>
+          <PopButton label="I’ll take it" tone="ghost" onPress={() => move(c, 'grab')} />
+        </View>
+      ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   center: { alignItems: 'center' },
-  section: { gap: 10, borderTopWidth: 1, borderTopColor: theme.color.border.subtle, paddingTop: 14 },
-  row: { gap: 4 },
+  centerText: { textAlign: 'center' },
+  flex: { flex: 1 },
+  step: { gap: 12, minHeight: 160 },
+  groups: { gap: 12 },
+  group: { gap: 6, borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 2 },
+  fold: { alignSelf: 'flex-start' },
   reveal: { gap: 8 },
   quote: { fontSize: 24, lineHeight: 30 },
   form: { gap: 10 },
-  account: { marginTop: 24, gap: 8, borderTopWidth: 1, borderTopColor: theme.color.border.subtle, paddingTop: 16 },
+  nextRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.color.bg.surface, paddingLeft: 14, paddingVertical: 4 },
 });

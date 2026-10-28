@@ -121,6 +121,19 @@ Testing must cost nothing. Every service below is on a free tier; no Apple Devel
 
 Verification per milestone: tsc, lint, jest (reducer, fairness, sorter on ~30 real English/Hinglish lines), SQL checks that one couple cannot read another, then the two phone check.
 
+## 0f. First two phone test feedback (Oct 28)
+
+Built on top of M3. Migration `0004_first_feedback.sql` must be applied before this app build is opened (the app reads `members.color`, `members.avatar`, `thanks.note`, `thanks.seen_at`).
+* Deck: Deck / All cards toggle (every open card, grouped, no decision needed to see the rest); swipe down skips a deal to the back; Options sheet under the deck with every move as a button (mark done straight from a deal, trade or table a card already on my deck, later).
+* Drop: round floating button on Deck and Us only (not Sync), tap to type, hold to talk. Voice uses the phone's own recognizer (`expo-speech-recognition`, en-IN): works in a dev build and on web, Expo Go falls back to the keyboard mic.
+* Keyboard: every sheet and scrolling screen uses `KeyboardAvoidingView` with `padding` on Android too (edge to edge windows no longer resize).
+* Profile: pick a color (six, never the partner's) and an optional emoji avatar, at sign up and in Settings behind the avatar pair. Account actions moved there from Sync.
+* Us: Now / Table / Album. Now holds the partner glance, wins to thank, new from partner, doing together, waiting. Table is a two column card grid. Album groups story cards by month with who did each.
+* Thanks: a heart can carry a line, goes out any day (from Us, or the banner when the partner finishes something), and arrives as a full screen moment that stays until read.
+* Push: partner drops (max 4 a day) and finished jobs (max 6 a day), quiet hours respected; hand pushes skip cards a drop push already announced.
+* Sign in: Apple (native, iOS) and Google (Supabase OAuth in an in app browser) buttons appear once each provider is switched on in Supabase.
+* Sync: Replay / Thanks / Next as steps, one on screen at a time; long replays fold.
+
 ## 1. The real problem (reframe)
 
 The pain is not "we forget tasks." It is **mental load**: one partner (usually) carries the invisible job of noticing, remembering, planning and delegating. That partner resents it; the other feels nagged. Every list app makes this worse because the noticer is still the one typing, assigning and chasing.

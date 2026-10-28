@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { useToast } from '@/ui/Toast';
 
 const SEEN = 'usync.banners.seenAt';
-const routeFor = (kind: unknown): Href => (kind === 'sync' ? '/sync' : '/');
+const routeFor = (kind: unknown): Href => (kind === 'sync' ? '/sync' : kind === 'drop' || kind === 'done' ? '/us' : '/');
 
 type Row = { kind: PushKind; title: string; body: string; sent_at: string };
 
@@ -39,8 +39,8 @@ export function NotificationsBridge() {
     if (Platform.OS === 'web') return;
     const sub = Notifications.addNotificationReceivedListener((n) => {
       const kind = n.request.content.data?.kind;
-      // Hearts already arrive live through the deck's realtime channel.
-      if (kind === 'thanks') return;
+      // Hearts, drops and finished jobs already arrive live through the deck's realtime channel.
+      if (kind === 'thanks' || kind === 'drop' || kind === 'done') return;
       toast({ kind: 'info', title: n.request.content.title ?? 'usync', body: n.request.content.body ?? undefined, ms: 6000 });
     });
     return () => sub.remove();
@@ -55,12 +55,12 @@ export function NotificationsBridge() {
       await AsyncStorage.setItem(SEEN, new Date().toISOString());
       const { data } = await supabase.from('push_outbox').select('kind, title, body, sent_at')
         .gt('sent_at', seen).order('sent_at', { ascending: false }).limit(5);
-      const rows = (data ?? []) as Row[];
+      // Unread hearts get their own full screen moment (HeartMoment), so they are left out here.
+      const rows = ((data ?? []) as Row[]).filter((r) => r.kind !== 'thanks');
       if (rows.length === 0) return;
-      // A heart beats everything else; otherwise the latest.
-      const top = rows.find((r) => r.kind === 'thanks') ?? rows[0];
+      const top = rows[0];
       const more = rows.length > 1 ? `  ·  ${rows.length - 1} more while you were away` : '';
-      toast({ kind: top.kind === 'thanks' ? 'thanks' : 'info', title: top.title + more, body: top.body, ms: 6000 });
+      toast({ kind: 'info', title: top.title + more, body: top.body, ms: 6000 });
     };
     const markSeen = () => AsyncStorage.setItem(SEEN, new Date().toISOString()).catch(() => undefined);
     // Wait a beat so the deck has painted before a banner slides over it.

@@ -2,7 +2,9 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 
 import { useAccount } from '@/features/account/account';
 import { dealTo, type LoadItem } from '@/lib/fairness';
-import { type EventRow, errorText, type Side, supabase, type TaskRow } from '@/lib/supabase';
+import { router } from 'expo-router';
+
+import { type EventRow, errorText, type Side, supabase, type TaskRow, type ThanksRow } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
@@ -21,7 +23,13 @@ type Deck = {
   resume: (id: string) => Promise<void>;
   /** Task ids I already sent a heart for. */
   thanked: Set<string>;
-  sendThanks: (id: string) => Promise<void>;
+  sendThanks: (id: string, note?: string) => Promise<void>;
+  /** Hearts from my partner I have not acknowledged yet, oldest first. */
+  hearts: ThanksRow[];
+  ackHeart: (id: number) => void;
+  /** The card my partner just finished, so a heart can go out right away. Cleared once handled. */
+  heartFor: Card | null;
+  askHeart: (card: Card | null) => void;
 };
 const Ctx = createContext<Deck | null>(null);
 
@@ -39,11 +47,15 @@ function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string):
     id: r.id, title: r.title, bucket: r.bucket, effort: r.effort, when: r.when_text, detail: r.detail,
     owner: ownerFor(r, side), status: r.status, traded: r.traded, weight: r.weight, story: story.get(r.id) ?? [],
     doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at, waitingNote: r.waiting_note,
+    droppedBy: r.dropped_by ? (r.dropped_by === myId ? 'me' : 'partner') : null, createdAt: r.created_at,
   }));
   const album: StoryCard[] = rows
     .filter((r) => r.status === 'done')
     .sort((x, y) => (y.done_at ?? '').localeCompare(x.done_at ?? ''))
-    .map((r) => ({ id: r.id, title: r.title, when: monthOf(r.done_at), together: r.owner === 'together' }));
+    .map((r) => ({
+      id: r.id, title: r.title, when: monthOf(r.done_at), together: r.owner === 'together', bucket: r.bucket,
+      doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null,
+    }));
   return { cards, album };
 }
 
@@ -56,11 +68,14 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<DeckState>(empty);
   const [ready, setReady] = useState(false);
   const [thanked, setThanked] = useState<Set<string>>(new Set());
+  const [hearts, setHearts] = useState<ThanksRow[]>([]);
+  const [heartFor, askHeart] = useState<Card | null>(null);
+  const stateRef = useRef<DeckState>(empty);
+  useEffect(() => { stateRef.current = state; }, [state]);
   const prev = useRef<Prev | null>(null);
   // Read inside the realtime callback without resubscribing on every change.
-  const rowsRef = useRef<TaskRow[]>([]);
   const partnerName = useRef('Your partner');
-  useEffect(() => { rowsRef.current = rows; partnerName.current = partner?.name ?? 'Your partner'; }, [rows, partner]);
+  useEffect(() => { partnerName.current = partner?.name ?? 'Your partner'; }, [partner]);
   const coupleId = me?.couple_id ?? null;
   const side = me?.side ?? 'a';
   const myId = me?.id ?? '';
@@ -70,13 +85,15 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     const [t, e, th] = await Promise.all([
       supabase.from('tasks').select('*').order('sort_at', { ascending: true }),
       supabase.from('task_events').select('id, task_id, actor, kind, text, at').order('at', { ascending: true }),
-      supabase.from('thanks').select('task_id').eq('from_member', myId),
+      supabase.from('thanks').select('id, task_id, from_member, note, seen_at, at').order('at', { ascending: true }),
     ]);
     if (t.error) throw t.error;
     if (e.error) throw e.error;
     const r = t.data as TaskRow[];
     setRows(r);
-    setThanked(new Set((th.data ?? []).map((x) => x.task_id as string)));
+    const all = (th.data ?? []) as ThanksRow[];
+    setThanked(new Set(all.filter((x) => x.from_member === myId && x.task_id).map((x) => x.task_id as string)));
+    setHearts(all.filter((x) => x.from_member !== myId && !x.seen_at));
     setState((s) => ({ ...s, ...toState(r, e.data as EventRow[], side, myId) }));
     setReady(true);
   }, [coupleId, side, myId]);
@@ -89,17 +106,56 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     const soon = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => { load().catch(() => undefined); }, 150); };
     const ch = supabase.channel(`deck-${coupleId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `couple_id=eq.${coupleId}` }, soon)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'task_events', filter: `couple_id=eq.${coupleId}` }, soon)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'task_events', filter: `couple_id=eq.${coupleId}` }, (p) => {
+        soon();
+        const e = p.new as EventRow;
+        if (!e.actor || e.actor === myId) return;
+        if (e.kind === 'drop') dropped.push(e.task_id);
+        if (e.kind === 'done') finished = e.task_id;
+        if (announce) clearTimeout(announce);
+        // Wait for the reload that brings the new cards in, then say what happened in one banner.
+        announce = setTimeout(tell, 600);
+      })
+      // A heart from my partner is the moment the product is built around: it takes the whole
+      // screen and stays until it has been read (see HeartMoment).
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'thanks', filter: `couple_id=eq.${coupleId}` }, (p) => {
-        // A heart from my partner is the moment the product is built around: show it right away.
-        const row = p.new as { from_member: string; task_id: string | null };
+        const row = p.new as ThanksRow;
         if (row.from_member === myId) return;
-        const title = rowsRef.current.find((x) => x.id === row.task_id)?.title;
         haptics.success();
-        toast({ kind: 'thanks', title: `${partnerName.current} sent a heart`, body: title ? `for “${title.toLowerCase()}”` : 'for something you did', ms: 5000 });
+        setHearts((h) => (h.some((x) => x.id === row.id) ? h : [...h, row]));
       })
       .subscribe();
-    return () => { if (timer) clearTimeout(timer); supabase.removeChannel(ch); };
+
+    // What my partner did while I am in the app: dropped something, or finished a job.
+    let announce: ReturnType<typeof setTimeout> | null = null;
+    let dropped: string[] = [];
+    let finished: string | null = null;
+    const tell = () => {
+      const cards = stateRef.current.cards;
+      const who = partnerName.current;
+      if (finished) {
+        const card = cards.find((c) => c.id === finished);
+        if (card) {
+          haptics.success();
+          toast({ kind: 'info', title: `${who} finished it`, body: card.title, ms: 7000, action: { label: 'Send a heart', onPress: () => askHeart(card) } });
+        }
+      } else if (dropped.length) {
+        const fresh = cards.filter((c) => dropped.includes(c.id));
+        const mine = fresh.filter((c) => c.owner === 'me' || c.owner === 'together').length;
+        const titles = fresh.map((c) => c.title).join(', ');
+        haptics.tick();
+        toast({
+          kind: 'info',
+          title: `${who} dropped ${dropped.length === 1 ? 'something' : `${dropped.length} things`}`,
+          body: `${titles || 'New cards'}${mine ? `. ${mine === fresh.length ? 'Dealt to you.' : `${mine} dealt to you.`}` : '.'}`,
+          ms: 7000,
+          action: { label: 'See', onPress: () => router.navigate(mine ? '/' : '/us') },
+        });
+      }
+      dropped = [];
+      finished = null;
+    };
+    return () => { if (timer) clearTimeout(timer); if (announce) clearTimeout(announce); supabase.removeChannel(ch); };
   }, [coupleId, load, toast, myId]);
 
   const fail = useCallback((err: unknown) => {
@@ -151,15 +207,23 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     await load();
   }, [load]);
 
-  const sendThanks = useCallback(async (id: string) => {
+  const sendThanks = useCallback(async (id: string, note?: string) => {
     if (!me?.couple_id) return;
     setThanked((s) => new Set(s).add(id));
-    const { error } = await supabase.from('thanks').insert({ couple_id: me.couple_id, task_id: id, from_member: me.id });
+    const { error } = await supabase.from('thanks').insert({ couple_id: me.couple_id, task_id: id, from_member: me.id, note: note?.trim() || null });
     // A second tap on another phone is fine: one heart per job is enforced by the database.
     if (error && error.code !== '23505') throw error;
   }, [me]);
 
-  const value = useMemo(() => ({ state, dispatch, ready, addUpdate, resume, thanked, sendThanks }), [state, dispatch, ready, addUpdate, resume, thanked, sendThanks]);
+  const ackHeart = useCallback((id: number) => {
+    setHearts((h) => h.filter((x) => x.id !== id));
+    supabase.rpc('ack_thanks', { heart: id }).then(() => undefined);
+  }, []);
+
+  const value = useMemo(
+    () => ({ state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor, askHeart }),
+    [state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor],
+  );
   return (
     <Ctx.Provider value={value}>
       <TradeTargetProvider>{children}</TradeTargetProvider>

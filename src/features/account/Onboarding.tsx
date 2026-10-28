@@ -1,23 +1,30 @@
-import { type ReactNode, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { AppleLogo, GoogleLogo } from 'phosphor-react-native';
+import { type ReactNode, useEffect, useState } from 'react';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { enabledProviders, type Providers, signInWithApple, signInWithGoogle } from '@/lib/socialAuth';
 import { errorText } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
-import { theme } from '@/theme/tokens';
+import { type PersonColor, theme } from '@/theme/tokens';
 import { Field } from '@/ui/Field';
 import { PopButton } from '@/ui/PopButton';
 import { Text } from '@/ui/Text';
 
 import { useAccount } from './account';
+import { ProfilePicker } from './ProfilePicker';
+
+// Apple shares the first name only on the very first sign in; keep it for the name step.
+let appleName: string | null = null;
 
 /** Shared shell for the three setup steps: one question per screen, keyboard safe. */
 function Step({ kicker, title, body, children }: { kicker: string; title: string; body: string; children: ReactNode }) {
   const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // 'padding' on Android too: edge to edge windows no longer resize for the keyboard.
+    <KeyboardAvoidingView style={styles.fill} behavior="padding">
       <ScrollView contentContainerStyle={[styles.body, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
-        <Text variant="label/md" color={theme.color.partner.a}>{kicker}</Text>
+        <Text variant="label/md" color={theme.color.together.base}>{kicker}</Text>
         <Text variant="display/lg">{title}</Text>
         <Text variant="body/lg" color={theme.color.text.secondary}>{body}</Text>
         <View style={styles.form}>{children}</View>
@@ -45,9 +52,18 @@ export function SignInStep() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { busy, error, run } = useBusy();
+  const [providers, setProviders] = useState<Providers>({ apple: false, google: false });
+  useEffect(() => { enabledProviders().then(setProviders).catch(() => undefined); }, []);
   const ok = /\S+@\S+\.\S+/.test(email) && password.length >= 6;
   return (
     <Step kicker="usync" title={mode === 'new' ? 'Share the load, not the nagging.' : 'Welcome back.'} body="usync works with two. Start now, invite your person after.">
+      {providers.apple && (
+        <PopButton label="Continue with Apple" icon={AppleLogo} tone="cream" disabled={busy} onPress={() => run(async () => { appleName = await signInWithApple(); })} />
+      )}
+      {providers.google && (
+        <PopButton label="Continue with Google" icon={GoogleLogo} tone="cream" disabled={busy} onPress={() => run(signInWithGoogle)} />
+      )}
+      {(providers.apple || providers.google) && <View style={styles.or}><Text variant="label/md" color={theme.color.text.muted}>or with email</Text></View>}
       <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@example.com" />
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === 'new' ? 'new-password' : 'current-password'} placeholder="6 characters or more" />
       <Err text={error} />
@@ -58,14 +74,17 @@ export function SignInStep() {
 }
 
 export function NameStep() {
-  const { saveName, signOut } = useAccount();
-  const [name, setName] = useState('');
+  const { saveProfile, signOut } = useAccount();
+  const [name, setName] = useState(appleName ?? '');
+  const [look, setLook] = useState<{ color: PersonColor; avatar: string | null }>({ color: 'ember', avatar: null });
   const { busy, error, run } = useBusy();
   return (
-    <Step kicker="1 of 2" title="What should your partner see?" body="Your first name is enough. It shows on cards and thanks.">
+    <Step kicker="1 of 2" title="What should your partner see?" body="Your first name, your color and, if you like, an avatar. They show on cards and thanks.">
       <Field label="Your name" value={name} onChangeText={setName} autoCapitalize="words" autoComplete="given-name" placeholder="Rahul" maxLength={24} />
+      <ProfilePicker value={look} onChange={setLook} initial={name.trim().charAt(0).toUpperCase() || null} />
+      <Text variant="caption" color={theme.color.text.muted}>If your partner already has this color, they keep it and you get another. You can change it later.</Text>
       <Err text={error} />
-      <PopButton label={busy ? 'Saving…' : 'Continue'} tone="cream" disabled={!name.trim() || busy} onPress={() => run(() => saveName(name))} />
+      <PopButton label={busy ? 'Saving…' : 'Continue'} tone="cream" disabled={!name.trim() || busy} onPress={() => run(() => saveProfile({ name, ...look }))} />
       <PopButton label="Use a different account" tone="ghost" onPress={signOut} />
     </Step>
   );
@@ -77,12 +96,12 @@ export function PairStep() {
   const { busy, error, run } = useBusy();
   return (
     <Step kicker="2 of 2" title={`Hi ${me?.name ?? ''}. Who are you sharing with?`} body="One of you starts the space and shares a code. The other joins with it.">
-      <PopButton label="Start our space" tone="ember" disabled={busy} onPress={() => run(createSpace)} />
+      <PopButton label="Start our space" tone="cream" disabled={busy} onPress={() => run(createSpace)} />
       <Text variant="caption" color={theme.color.text.muted}>You get a code to send on WhatsApp. You can drop things before they join.</Text>
       <View style={styles.or}><Text variant="label/md" color={theme.color.text.muted}>or join theirs</Text></View>
       <Field label="Invite code" value={code} onChangeText={(t) => setCode(t.toUpperCase())} autoCapitalize="characters" autoCorrect={false} placeholder="K7Q2MX" maxLength={6} />
       <Err text={error} />
-      <PopButton label={busy ? 'Joining…' : 'Join with code'} tone="lagoon" disabled={code.trim().length !== 6 || busy} onPress={() => run(() => joinSpace(code))} />
+      <PopButton label={busy ? 'Joining…' : 'Join with code'} tone="cream" disabled={code.trim().length !== 6 || busy} onPress={() => run(() => joinSpace(code))} />
     </Step>
   );
 }

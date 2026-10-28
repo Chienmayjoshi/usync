@@ -25,9 +25,11 @@ export type Card = {
   doneBy?: 'me' | 'partner' | null;
   doneAt?: string | null;
   waitingNote?: string | null;
+  droppedBy?: 'me' | 'partner' | null;
+  createdAt?: string;
 };
 
-export type StoryCard = { id: string; title: string; when: string; together: boolean };
+export type StoryCard = { id: string; title: string; when: string; together: boolean; bucket?: Bucket; doneBy?: 'me' | 'partner' | null };
 
 export type DeckState = {
   cards: Card[];
@@ -45,6 +47,7 @@ export type DeckAction =
   | { type: 'done'; id: string }
   | { type: 'later'; id: string }
   | { type: 'grab'; id: string }
+  | { type: 'table'; id: string }
   | { type: 'drop'; cards: Card[] }
   | { type: 'undo' }
   | { type: 'clearUndo' };
@@ -72,12 +75,17 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     }
     case 'trade': {
       const c = find(state.cards, action.id);
-      if (!c || c.status !== 'deal') return state;
+      if (!c || !canHandOff(c)) return state;
       if (!c.traded) {
-        return { ...state, cards: update(state.cards, c.id, { owner: 'partner', traded: true, story: [...c.story, 'Traded'] }), undo: snapshot('Traded to Meera') };
+        return { ...state, cards: toBack(update(state.cards, c.id, { owner: 'partner', traded: true, status: 'deal', story: [...c.story, 'Traded'] }), c.id), undo: snapshot('Traded') };
       }
       // The trade is used: passing again puts it on the open table, never back and forth.
-      return { ...state, cards: update(state.cards, c.id, { owner: 'table', story: [...c.story, 'Passed to the open table'] }), undo: snapshot('Passed to the table') };
+      return { ...state, cards: toBack(update(state.cards, c.id, { owner: 'table', status: 'deal', story: [...c.story, 'Passed to the open table'] }), c.id), undo: snapshot('Passed to the table') };
+    }
+    case 'table': {
+      const c = find(state.cards, action.id);
+      if (!c || !canHandOff(c) || c.owner === 'table') return state;
+      return { ...state, cards: toBack(update(state.cards, c.id, { owner: 'table', status: 'deal', story: [...c.story, 'Put on the open table'] }), c.id), undo: snapshot('On the table') };
     }
     case 'together': {
       const c = find(state.cards, action.id);
@@ -86,24 +94,25 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     }
     case 'later': {
       const c = find(state.cards, action.id);
-      if (!c || c.status !== 'active') return state;
-      // Not this week: leaves the deck by moving to the back of the pile.
+      if (!c || (c.status !== 'active' && c.status !== 'deal')) return state;
+      // Not now: back of the pile. A deal stays undecided, so the next card can be seen first.
       const rest = state.cards.filter((x) => x.id !== c.id);
-      return { ...state, cards: [...rest, { ...c, story: [...c.story, 'Moved to later'] }], undo: snapshot('Moved to later') };
+      return { ...state, cards: [...rest, { ...c, story: [...c.story, c.status === 'deal' ? 'Skipped for now' : 'Moved to later'] }], undo: snapshot('Moved to later') };
     }
     case 'grab': {
       const c = find(state.cards, action.id);
-      if (!c || c.owner !== 'table') return state;
+      if (!c || c.owner !== 'table' || c.status === 'done') return state;
       return { ...state, cards: update(state.cards, c.id, { owner: 'me', status: 'active', story: [...c.story, 'Grabbed from the table'] }), undo: snapshot('Grabbed') };
     }
     case 'done': {
       const c = find(state.cards, action.id);
-      // Waiting cards can close straight away when the technician finally comes through.
-      if (!c || (c.status !== 'active' && c.status !== 'waiting')) return state;
-      const story: StoryCard = { id: c.id, title: c.title, when: 'This week', together: c.owner === 'together' };
+      // Any open card can close: a deal I already handled, or a waiting card when the technician comes through.
+      if (!c || c.status === 'done') return state;
+      const story: StoryCard = { id: c.id, title: c.title, when: 'This week', together: c.owner === 'together', bucket: c.bucket, doneBy: 'me' };
+      const owner = c.status === 'deal' && c.owner !== 'together' ? 'me' : c.owner;
       return {
         ...state,
-        cards: update(state.cards, c.id, { status: 'done', story: [...c.story, 'Done'] }),
+        cards: update(state.cards, c.id, { status: 'done', owner, doneBy: 'me', doneAt: new Date().toISOString(), story: [...c.story, 'Done'] }),
         album: [story, ...state.album],
         lastDoneId: c.id,
         undo: snapshot('Done'),
@@ -130,6 +139,21 @@ export function laterCount(state: DeckState): number {
   const mine = state.cards.filter((c) => (c.owner === 'me' || c.owner === 'together') && (c.status === 'deal' || c.status === 'active'));
   return Math.max(0, mine.length - MAX_VISIBLE);
 }
+
+/**
+ * A card I can pass on: any deal (mine or not yet decided), or one already on my deck that is
+ * mine alone. Together cards stay shared; the partner's cards are theirs to pass.
+ */
+export function canHandOff(c: Card): boolean {
+  if (c.status === 'deal') return c.owner === 'me' || c.owner === 'together';
+  return c.status === 'active' && c.owner === 'me';
+}
+
+/** Every open card on my side, in deck order: the full list behind the five card deck. */
+export const myCards = (s: DeckState) =>
+  s.cards.filter((c) => (c.owner === 'me' || c.owner === 'together') && (c.status === 'deal' || c.status === 'active'));
+
+export const togetherCards = (s: DeckState) => s.cards.filter((c) => c.owner === 'together' && c.status !== 'done');
 
 export const partnerCards = (s: DeckState) => s.cards.filter((c) => c.owner === 'partner' && c.status !== 'done');
 export const tableCards = (s: DeckState) => s.cards.filter((c) => c.owner === 'table' && c.status !== 'done');

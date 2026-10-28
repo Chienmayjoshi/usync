@@ -10,7 +10,8 @@
     "backgroundColor": "#0B0A0F",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.usync.app"
+      "bundleIdentifier": "com.usync.app",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.usync.app",
@@ -42,6 +43,18 @@
         {
           "color": "#F5C451",
           "defaultChannel": "default"
+        }
+      ],
+      "expo-web-browser",
+      "expo-apple-authentication",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "usync listens only while you hold the mic, to turn what you say into a card.",
+          "speechRecognitionPermission": "usync turns what you say into a card on your phone. Audio is not stored.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
     ],

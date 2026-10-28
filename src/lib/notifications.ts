@@ -11,7 +11,7 @@ import { supabase } from './supabase';
 // over its token. Phones that cannot get push (web, Expo Go on Android, simulators) fall back to
 // in app banners built from the same outbox.
 
-export type PushKind = 'thanks' | 'sync' | 'hand' | 'nudge';
+export type PushKind = 'thanks' | 'sync' | 'hand' | 'nudge' | 'drop' | 'done';
 
 /** Why this phone has no push, or null when it can have it. */
 export function pushUnavailable(): string | null {

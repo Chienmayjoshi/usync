@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { interpolate, type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
-import { useAccount } from '@/features/account/account';
-import { theme, type Tone, tones } from '@/theme/tokens';
+import { useAccount, useNames } from '@/features/account/account';
+import { type PersonColor, theme, type Tone, tones } from '@/theme/tokens';
 import { Edges } from '@/ui/Edges';
 import { Text } from '@/ui/Text';
 
@@ -11,18 +11,23 @@ import type { Card } from './model';
 
 export const CARD_DEPTH = 6;
 
-export function toneFor(card: Card): Tone {
+export type People = { me: PersonColor; partner: PersonColor };
+
+/** Each person's cards wear their own color; together is gold, the table neutral. */
+export function toneFor(card: Card, colors: People): Tone {
   if (card.owner === 'together') return 'gold';
   if (card.owner === 'table') return 'neutral';
-  if (card.owner === 'partner') return 'lagoon';
-  return 'ember';
+  if (card.owner === 'partner') return colors.partner;
+  return colors.me;
 }
 
-/** Swipe hints per card. Solo (partner not joined yet) a deal can only be taken. */
-export function hintsFor(card: Card, solo = false): { left: string | null; up: string | null; right: string } {
-  if (card.status === 'active') return { left: 'later', up: null, right: 'done' };
-  if (solo) return { left: null, up: null, right: 'take it' };
-  return { left: card.traded ? 'to the table' : 'trade', up: 'together', right: 'take it' };
+export type Hints = { left: string | null; up: string | null; down: string | null; right: string };
+
+/** Swipe hints per card. Solo (partner not joined yet) a deal can only be taken or skipped. */
+export function hintsFor(card: Card, solo = false): Hints {
+  if (card.status === 'active') return { left: 'later', up: null, down: null, right: 'done' };
+  if (solo) return { left: null, up: null, down: 'skip', right: 'take it' };
+  return { left: card.traded ? 'to the table' : 'trade', up: 'together', down: 'skip', right: 'take it' };
 }
 
 type Props = { card: Card; flip: SharedValue<number>; minHeight?: number };
@@ -30,8 +35,12 @@ type Props = { card: Card; flip: SharedValue<number>; minHeight?: number };
 /** A deck card with a front (the job) and a back (the job story). `flip` runs 0 -> 1. */
 export function DealCard({ card, flip, minHeight = 260 }: Props) {
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const tone = tones[toneFor(card)];
+  const names = useNames();
+  const tone = tones[toneFor(card, names.colors)];
   const hints = hintsFor(card, !useAccount().partner);
+  const label = card.status === 'active' ? (card.owner === 'together' ? 'Together, on both decks' : 'On your deck')
+    : card.owner === 'together' ? 'Together' : 'Dealt to you';
+  const from = card.droppedBy === 'partner' ? `  ·  from ${names.partnerOr}` : '';
 
   const front = useAnimatedStyle(() => ({
     transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }],
@@ -47,7 +56,7 @@ export function DealCard({ card, flip, minHeight = 260 }: Props) {
       <Edges width={size.w} height={size.h} depth={CARD_DEPTH} edge={tone.edge} edgeDeep={tone.edgeDeep} />
       <Animated.View onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })} style={[face, styles.hidden, front]}>
         <View style={styles.top}>
-          <Text variant="label/md" color={tone.accent}>{card.status === 'active' ? 'On your deck' : card.owner === 'together' ? 'Together' : 'Dealt to you'}</Text>
+          <Text variant="label/md" color={tone.accent} style={styles.flex} numberOfLines={1}>{label + from}</Text>
           <View style={styles.grip} accessibilityLabel="Hold to update">
             {[0, 1, 2].map((i) => <View key={i} style={styles.dot} />)}
           </View>
@@ -64,7 +73,9 @@ export function DealCard({ card, flip, minHeight = 260 }: Props) {
         <View style={styles.spacer} />
         <View style={styles.hints}>
           {hints.left ? <Text variant="caption" color={theme.color.text.muted}>{`← ${hints.left}`}</Text> : <View />}
-          {hints.up && <Text variant="caption" color={theme.color.text.muted}>{`↑ ${hints.up}`}</Text>}
+          {(hints.up || hints.down) && (
+            <Text variant="caption" color={theme.color.text.muted}>{[hints.up && `↑ ${hints.up}`, hints.down && `↓ ${hints.down}`].filter(Boolean).join('   ')}</Text>
+          )}
           <Text variant="caption" color={theme.color.text.muted}>{`${hints.right} →`}</Text>
         </View>
       </Animated.View>
