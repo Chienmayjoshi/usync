@@ -8,7 +8,7 @@ import { type EventRow, errorText, type Side, supabase, type TaskRow, type Thank
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
-import { type Card, type DeckAction, deckReducer, type DeckState, type Owner, type StoryCard } from './model';
+import { type Card, type DeckAction, deckReducer, type DeckState, type DropAssign, type Owner, type StoryCard } from './model';
 import { TradeTargetProvider } from './tradeTarget';
 
 // The deck lives in Supabase. Moves apply locally first (so swipes feel instant), then the
@@ -21,6 +21,8 @@ type Deck = {
   /** One line update; `waiting` parks the card off the deck until someone else comes through. */
   addUpdate: (id: string, note: string, waiting: boolean) => Promise<void>;
   resume: (id: string) => Promise<void>;
+  /** The dropper changes who an undecided card is for. Free: no trade is spent. */
+  reassign: (id: string, to: 'me' | 'partner' | 'together') => Promise<void>;
   /** Task ids I already sent a heart for. */
   thanked: Set<string>;
   sendThanks: (id: string, note?: string) => Promise<void>;
@@ -163,27 +165,39 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     load().catch(() => undefined);
   }, [load, toast]);
 
-  const drop = useCallback(async (cards: Card[]) => {
+  const drop = useCallback(async (cards: Card[], assign: DropAssign = 'auto') => {
     if (!me?.couple_id || !me.side) return;
-    // Deal each new card by load. Before the partner joins, everything waits on my deck.
+    // Auto deals each new card by load. Before the partner joins, everything waits on my deck.
     const load: LoadItem[] = rows.map((r) => ({ owner: r.owner, weight: r.weight, at: Date.parse(r.done_at ?? r.created_at), done: r.status === 'done' }));
     const inserts = cards.map((c) => {
-      const owner: TaskRow['owner'] = !partner ? me.side! : dealTo(load, me.side!, { together: c.owner === 'together' });
+      const mine = !partner || assign === 'me';
+      const owner: TaskRow['owner'] = mine ? me.side!
+        : assign === 'together' ? 'together'
+          : dealTo(load, me.side!, { together: c.owner === 'together' });
       load.push({ owner, weight: c.weight, at: Date.now(), done: false });
       const detail = owner === 'together' ? 'A shared plan, so it’s on both decks.'
         : !partner ? 'Waiting for your partner to join. Until then it’s yours.'
-          : `Dealt to ${owner === me.side ? me.name : partner.name}: less on their plate this week.`;
-      return { couple_id: me.couple_id!, title: c.title, raw: c.title, bucket: c.bucket, effort: c.effort, weight: c.weight, when_text: c.when, detail, owner, dropped_by: me.id };
+          : mine ? 'You dropped it for yourself.'
+            : `Dealt to ${owner === me.side ? me.name : partner.name}: less on their plate this week.`;
+      // A card dropped for myself needs no decision: it goes straight onto my deck as taken.
+      const status: TaskRow['status'] = partner && assign === 'me' ? 'active' : 'deal';
+      return { couple_id: me.couple_id!, title: c.title, raw: c.title, bucket: c.bucket, effort: c.effort, weight: c.weight, when_text: c.when, detail, owner, status, dropped_by: me.id };
     });
     const { data, error } = await supabase.from('tasks').insert(inserts).select('id, couple_id');
     if (error) throw error;
     await supabase.from('task_events').insert(data.map((t) => ({ task_id: t.id, couple_id: t.couple_id, actor: me.id, kind: 'drop', text: `${me.name} dropped it` })));
   }, [me, partner, rows]);
 
+  const reassign = useCallback(async (id: string, to: 'me' | 'partner' | 'together') => {
+    const { error } = await supabase.rpc('reassign_task', { task: id, to_who: to });
+    if (error) throw error;
+    await load();
+  }, [load]);
+
   const dispatch = useCallback((a: DeckAction) => {
     setState((s) => deckReducer(s, a));
     if (a.type === 'clearUndo') { prev.current = null; return; }
-    if (a.type === 'drop') { drop(a.cards).catch(fail); return; }
+    if (a.type === 'drop') { drop(a.cards, a.assign).catch(fail); return; }
     if (a.type === 'undo') {
       const p = prev.current;
       prev.current = null;
@@ -221,8 +235,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor, askHeart }),
-    [state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor],
+    () => ({ state, dispatch, ready, addUpdate, resume, reassign, thanked, sendThanks, hearts, ackHeart, heartFor, askHeart }),
+    [state, dispatch, ready, addUpdate, resume, reassign, thanked, sendThanks, hearts, ackHeart, heartFor],
   );
   return (
     <Ctx.Provider value={value}>

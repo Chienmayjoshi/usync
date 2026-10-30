@@ -56,6 +56,8 @@ function Now({ onOpen }: { onOpen: (c: Card) => void }) {
   const glance = partnerCards(state).filter((c) => c.status !== 'waiting');
   const together = togetherCards(state).filter((c) => c.status !== 'waiting');
   const waiting = waitingCards(state);
+  // Cards I dropped that nobody has decided on yet: the place to change who they are for.
+  const undecided = state.cards.filter((c) => c.droppedBy === 'me' && c.status === 'deal' && c.owner !== 'me');
   const fresh = state.cards.filter((c) => c.droppedBy === 'partner' && c.status !== 'done' && c.createdAt && Date.parse(c.createdAt) > weekAgo);
   const wins = state.cards
     .filter((c) => c.status === 'done' && c.doneBy === 'partner' && c.doneAt && Date.parse(c.doneAt) > weekAgo)
@@ -86,6 +88,19 @@ function Now({ onOpen }: { onOpen: (c: Card) => void }) {
               {thanked.has(c.id)
                 ? <Text variant="label/md" color={theme.color.together.base}>Heart sent</Text>
                 : <PopButton label="Send a heart" tone="gold" onPress={() => { haptics.tick(); askHeart(c); }} />}
+            </View>
+          ))}
+        </Section>
+      )}
+
+      {undecided.length > 0 && (
+        <Section label="You dropped, still undecided" hint="tap to change who it’s for">
+          {undecided.map((c) => (
+            <View key={c.id} style={styles.undecided}>
+              <Row card={c} onPress={() => onOpen(c)} />
+              <Text variant="caption" color={theme.color.text.muted}>
+                {c.owner === 'partner' ? `Waiting on ${names.partnerOr} to take or trade it.` : c.owner === 'together' ? 'Offered to both of you.' : 'On the open table.'}
+              </Text>
             </View>
           ))}
         </Section>
@@ -211,6 +226,7 @@ const styles = StyleSheet.create({
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   winRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1.5, borderColor: theme.color.together.edge, padding: 12 },
   empty: { gap: 8, paddingVertical: 24 },
+  undecided: { gap: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   tableCard: { width: '47.5%', minHeight: 168, backgroundColor: theme.color.bg.raised, borderWidth: 1.5, borderColor: tones.neutral.edge, padding: 14, gap: 8 },
   albumHead: { gap: 4 },

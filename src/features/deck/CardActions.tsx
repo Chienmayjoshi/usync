@@ -6,6 +6,9 @@ import { theme, tones } from '@/theme/tokens';
 import { PopButton } from '@/ui/PopButton';
 import { Sheet } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
+import { useToast } from '@/ui/Toast';
+
+import { errorText } from '@/lib/supabase';
 
 import { toneFor } from './DealCard';
 import { canHandOff, type Card } from './model';
@@ -19,17 +22,27 @@ type Props = { card: Card; onClose: () => void; onUpdate: (card: Card) => void }
  */
 export function CardActions({ card, onClose, onUpdate }: Props) {
   const { partner } = useAccount();
-  const { resume } = useDeck();
+  const { resume, reassign } = useDeck();
+  const toast = useToast();
   const names = useNames();
   const move = useMoves();
   const tone = tones[toneFor(card, names.colors)];
   const act = (m: Move) => { onClose(); move(card, m); };
 
   const deal = card.status === 'deal';
+  const theirs = card.owner === 'partner';
+  // The dropper can still change who an undecided card is for, for free.
+  const mineToChange = !!partner && deal && card.droppedBy === 'me';
+  const change = (to: 'me' | 'partner' | 'together', msg: string) => {
+    onClose();
+    reassign(card.id, to)
+      .then(() => toast({ kind: 'info', title: msg, body: card.title, ms: 3000 }))
+      .catch((e) => toast({ kind: 'info', title: 'That didn’t change', body: errorText(e) }));
+  };
   const handOff = !!partner && canHandOff(card);
   const label = card.owner === 'table' ? 'On the open table'
     : card.status === 'waiting' ? 'Waiting on someone else'
-      : card.owner === 'together' ? 'Together' : deal ? 'Dealt to you' : 'On your deck';
+      : card.owner === 'together' ? 'Together' : theirs ? `Dealt to ${names.partnerOr}` : deal ? 'Dealt to you' : 'On your deck';
 
   return (
     <Sheet onClose={onClose}>
@@ -47,7 +60,7 @@ export function CardActions({ card, onClose, onUpdate }: Props) {
           <PopButton label="Grab it" tone="cream" onPress={() => act('grab')} />
         ) : card.status === 'waiting' ? (
           <PopButton label="They came through: back on my deck" tone="cream" onPress={() => { onClose(); resume(card.id).catch(() => undefined); }} />
-        ) : deal ? (
+        ) : deal && !theirs ? (
           <>
             <PopButton label="Take it" tone="cream" onPress={() => act('take')} />
             {!!partner && <PopButton label="Do it together" tone="gold" onPress={() => act('together')} />}
@@ -56,6 +69,9 @@ export function CardActions({ card, onClose, onUpdate }: Props) {
 
         <PopButton label={deal ? 'Already done it' : 'Mark done'} tone={deal || card.status === 'waiting' || card.owner === 'table' ? 'ghost' : 'cream'} onPress={() => act('done')} />
         <PopButton label="Add an update" tone="ghost" onPress={() => { onClose(); onUpdate(card); }} />
+        {mineToChange && card.owner !== 'me' && <PopButton label="Keep it, it’s mine" tone="cream" onPress={() => change('me', 'On your deck')} />}
+        {mineToChange && card.owner !== 'partner' && <PopButton label={`Give it to ${names.partnerOr}`} tone="ghost" onPress={() => change('partner', `Dealt to ${names.partnerOr}`)} />}
+        {mineToChange && card.owner !== 'together' && <PopButton label="Make it together" tone="ghost" onPress={() => change('together', 'On both decks')} />}
         {handOff && !card.traded && <PopButton label={`Trade to ${names.partnerOr}`} tone="ghost" onPress={() => act('trade')} />}
         {handOff && card.owner !== 'table' && <PopButton label="Put it on the open table" tone="ghost" onPress={() => act('table')} />}
         {(deal || card.status === 'active') && (card.owner === 'me' || card.owner === 'together') && (

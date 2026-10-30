@@ -1,13 +1,16 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Microphone, Stop } from 'phosphor-react-native';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
-import { type Card, fakeSort, splitDrop } from '@/features/deck/model';
+import { useAccount, useNames } from '@/features/account/account';
+import { type Card, type DropAssign, fakeSort, splitDrop } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { haptics } from '@/theme/haptics';
 import { theme } from '@/theme/tokens';
 import { PopButton } from '@/ui/PopButton';
+import { Segmented } from '@/ui/Segmented';
 import { Sheet } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
@@ -20,6 +23,13 @@ const Ctx = createContext<(mode?: DropMode) => void>(() => undefined);
 export const useOpenDrop = () => useContext(Ctx);
 
 type Phase = 'typing' | 'sorting' | 'sorted';
+
+const ASSIGN_KEY = 'usync.drop.assign';
+const ASSIGN_HELP: Record<DropAssign, (partner: string) => string> = {
+  auto: (p) => `Goes to whoever has less on their plate this week. ${p} can take it or trade it.`,
+  me: () => 'Straight onto your deck as yours. Nothing is dealt to anyone.',
+  together: (p) => `On both decks. You and ${p} do it as a pair.`,
+};
 
 export function DropProvider({ children }: { children: ReactNode }) {
   // A fresh key per open remounts the sheet, so every drop starts from a clean slate.
@@ -34,8 +44,16 @@ export function DropProvider({ children }: { children: ReactNode }) {
 
 function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
   const { dispatch } = useDeck();
+  const { partner } = useAccount();
+  const names = useNames();
   const toast = useToast();
   const [text, setText] = useState('');
+  // Remembered between drops: someone dropping their own errands shouldn't re-pick every time.
+  const [assign, setAssign] = useState<DropAssign>('auto');
+  useEffect(() => {
+    AsyncStorage.getItem(ASSIGN_KEY).then((v) => { if (v === 'auto' || v === 'me' || v === 'together') setAssign(v); }).catch(() => undefined);
+  }, []);
+  const pickAssign = (v: DropAssign) => { setAssign(v); AsyncStorage.setItem(ASSIGN_KEY, v).catch(() => undefined); };
   const [phase, setPhase] = useState<Phase>('typing');
   const [preview, setPreview] = useState<Card[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -76,9 +94,10 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
     // Card appears instantly; sorting resolves without blocking (rule F8).
     timers.current.push(setTimeout(() => { setPhase('sorted'); haptics.tick(); }, 900));
     timers.current.push(setTimeout(() => {
-      dispatch({ type: 'drop', cards });
+      dispatch({ type: 'drop', cards, assign });
       haptics.success();
-      toast({ kind: 'info', title: `${cards.length === 1 ? '1 card' : `${cards.length} cards`} sorted`, body: 'Nothing for you to fill in. Dealt by who has less on their plate.', ms: 3500 });
+      const where = !partner || assign === 'me' ? 'It’s on your deck.' : assign === 'together' ? 'It’s on both decks.' : 'Dealt by who has less on their plate. Change it from Us if it’s yours.';
+      toast({ kind: 'info', title: `${cards.length === 1 ? '1 card' : `${cards.length} cards`} sorted`, body: where, ms: 4500 });
       onClose();
     }, 2100));
   };
@@ -100,6 +119,17 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
               accessibilityLabel="What needs doing?"
             />
           </View>
+          {partner && (
+            <View style={styles.who}>
+              <Text variant="label/md" color={theme.color.text.muted}>Who’s it for?</Text>
+              <Segmented
+                value={assign}
+                onChange={pickAssign}
+                options={[{ value: 'auto', label: 'Fair split' }, { value: 'me', label: 'Just me' }, { value: 'together', label: 'Together' }]}
+              />
+              <Text variant="caption" color={theme.color.text.muted}>{ASSIGN_HELP[assign](names.partnerOr)}</Text>
+            </View>
+          )}
           <View style={styles.row}>
             <MicButton listening={voice.listening} onPress={toggleVoice} />
             <PopButton label="Drop it" tone="cream" fill onPress={submit} disabled={!text.trim()} />
@@ -164,6 +194,7 @@ const styles = StyleSheet.create({
   inputLive: { borderColor: theme.color.together.base },
   inputText: { color: theme.color.text.primary, fontFamily: 'Manrope_700Bold', fontSize: 17, lineHeight: 22 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  who: { gap: 8 },
   micWrap: { width: MIC, height: MIC, alignItems: 'center', justifyContent: 'center' },
   micRing: { position: 'absolute', width: MIC, height: MIC, borderRadius: MIC / 2, borderWidth: 2, borderColor: theme.color.together.base },
   mic: { width: MIC, height: MIC, borderRadius: MIC / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: theme.color.border.strong, backgroundColor: theme.color.bg.surface },

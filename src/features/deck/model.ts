@@ -48,9 +48,12 @@ export type DeckAction =
   | { type: 'later'; id: string }
   | { type: 'grab'; id: string }
   | { type: 'table'; id: string }
-  | { type: 'drop'; cards: Card[] }
+  | { type: 'drop'; cards: Card[]; assign?: DropAssign }
   | { type: 'undo' }
   | { type: 'clearUndo' };
+
+/** Who a dropped card is for: split by load, kept by the dropper, or shared. */
+export type DropAssign = 'auto' | 'me' | 'together';
 
 export const MAX_VISIBLE = 5;
 
