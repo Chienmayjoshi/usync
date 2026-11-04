@@ -1,122 +1,134 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { balanceTilt, canHandOff, type Card, deckReducer, type DeckState, fakeSort, laterCount, MAX_VISIBLE, myCards, myDeck, splitDrop } from './model';
+import { balanceTilt, byWhen, type Card, deckCards, deckReducer, type DeckState, fakeSort, partnerDeck, splitDrop, tableCards } from './model';
 
 const card = (id: string, patch: Partial<Card> = {}): Card => ({
-  id, title: id, bucket: 'Home', effort: '10 min', when: 'this week', detail: '', owner: 'me', status: 'deal', traded: false, weight: 1, story: [], ...patch,
+  id, title: id, bucket: 'Home', effort: '10 min', when: 'this week', detail: '', owner: 'table', status: 'deal', traded: false, weight: 1, story: [], ...patch,
 });
 const state = (cards: Card[]): DeckState => ({ cards, album: [], weeksInSync: 0, undo: null, lastDoneId: null });
 
-describe('trade rules', () => {
-  it('first trade sends the card to the partner and spends the trade', () => {
-    const s = deckReducer(state([card('a')]), { type: 'trade', id: 'a' });
-    expect(s.cards[0]).toMatchObject({ owner: 'partner', traded: true, status: 'deal' });
+describe('the table', () => {
+  it('grabbing a table card puts it on my deck', () => {
+    const s = deckReducer(state([card('a')]), { type: 'grab', id: 'a' });
+    expect(s.cards[0]).toMatchObject({ owner: 'me', status: 'active' });
+    expect(deckCards(s).map((c) => c.id)).toEqual(['a']);
+    expect(tableCards(s)).toHaveLength(0);
   });
 
-  it('a second pass sends the card to the open table, never back to me', () => {
-    const s = deckReducer(state([card('a', { traded: true })]), { type: 'trade', id: 'a' });
-    expect(s.cards[0].owner).toBe('table');
+  it('next moves the top card to the back without changing it', () => {
+    const s = deckReducer(state([card('a'), card('b')]), { type: 'next', id: 'a' });
+    expect(tableCards(s).map((c) => c.id)).toEqual(['b', 'a']);
+    expect(s.cards[1]).toMatchObject({ owner: 'table', status: 'deal' });
+    expect(s.undo).toBeNull();
   });
 
-  it('a card already on my deck can still be traded, and comes back as a deal for them', () => {
-    const s = deckReducer(state([card('a', { status: 'active' })]), { type: 'trade', id: 'a' });
-    expect(s.cards[0]).toMatchObject({ owner: 'partner', traded: true, status: 'deal' });
+  it('asking my partner sends the card to them as a request', () => {
+    const s = deckReducer(state([card('a')]), { type: 'ask', id: 'a' });
+    expect(s.cards[0]).toMatchObject({ owner: 'partner', status: 'deal', request: 'take', requestedBy: 'me' });
+    expect(partnerDeck(s).map((c) => c.id)).toEqual(['a']);
   });
 
-  it('shared and partner cards are not mine to trade', () => {
-    const shared = state([card('a', { status: 'active', owner: 'together' })]);
-    expect(deckReducer(shared, { type: 'trade', id: 'a' })).toBe(shared);
-    const theirs = state([card('a', { status: 'active', owner: 'partner' })]);
-    expect(deckReducer(theirs, { type: 'trade', id: 'a' })).toBe(theirs);
-    expect(canHandOff(card('x', { owner: 'partner', status: 'active' }))).toBe(false);
-  });
-
-  it('any card of mine can go straight to the open table, trade used or not', () => {
-    const s = deckReducer(state([card('a', { status: 'active' }), card('b')]), { type: 'table', id: 'a' });
-    expect(s.cards.find((c) => c.id === 'a')).toMatchObject({ owner: 'table', status: 'deal', traded: false });
-    expect(myDeck(s).map((c) => c.id)).toEqual(['b']);
-  });
-
-  it('taking a card sends it to the back so the next card comes up', () => {
-    const s = deckReducer(state([card('a'), card('b')]), { type: 'take', id: 'a' });
-    expect(myDeck(s).map((c) => c.id)).toEqual(['b', 'a']);
-  });
-
-  it('together makes the card active and shared', () => {
+  it('do it together stays a pending request until my partner says yes', () => {
     const s = deckReducer(state([card('a')]), { type: 'together', id: 'a' });
-    expect(s.cards[0]).toMatchObject({ owner: 'together', status: 'active' });
+    expect(s.cards[0]).toMatchObject({ owner: 'together', status: 'deal', request: 'together' });
+    expect(deckCards(s)).toHaveLength(0);
   });
 });
 
-describe('done and the album', () => {
-  it('done closes the card and adds a story card to the shared album', () => {
-    let s = deckReducer(state([card('a')]), { type: 'take', id: 'a' });
-    s = deckReducer(s, { type: 'done', id: 'a' });
-    expect(s.cards[0].status).toBe('done');
-    expect(s.album[0]).toMatchObject({ id: 'a', together: false });
-    expect(myDeck(s)).toHaveLength(0);
+describe('requests on my deck', () => {
+  const asked = card('a', { owner: 'me', status: 'deal', request: 'take', requestedBy: 'partner' });
+  const shared = card('b', { owner: 'together', status: 'deal', request: 'together', requestedBy: 'partner' });
+  const wanted = card('c', { owner: 'me', status: 'active', request: 'give', requestedBy: 'partner' });
+
+  it('requests come first on my deck', () => {
+    const s = state([card('x', { owner: 'me', status: 'active' }), asked]);
+    expect(deckCards(s).map((c) => c.id)).toEqual(['a', 'x']);
   });
 
-  it('a deal I already handled can be marked done without taking it first', () => {
-    const s = deckReducer(state([card('a')]), { type: 'done', id: 'a' });
-    expect(s.cards[0]).toMatchObject({ status: 'done', owner: 'me', doneBy: 'me' });
+  it('take it, yes together and give it each resolve the request', () => {
+    expect(deckReducer(state([asked]), { type: 'accept', id: 'a' }).cards[0]).toMatchObject({ owner: 'me', status: 'active', request: null });
+    expect(deckReducer(state([shared]), { type: 'accept', id: 'b' }).cards[0]).toMatchObject({ owner: 'together', status: 'active', request: null });
+    expect(deckReducer(state([wanted]), { type: 'accept', id: 'c' }).cards[0]).toMatchObject({ owner: 'partner', status: 'active', request: null });
+  });
+
+  it('not this one and not now send the card back to the table; keep it keeps it', () => {
+    expect(deckReducer(state([asked]), { type: 'decline', id: 'a' }).cards[0]).toMatchObject({ owner: 'table', status: 'deal', request: null });
+    expect(deckReducer(state([shared]), { type: 'decline', id: 'b' }).cards[0]).toMatchObject({ owner: 'table', request: null });
+    expect(deckReducer(state([wanted]), { type: 'decline', id: 'c' }).cards[0]).toMatchObject({ owner: 'me', status: 'active', request: null });
+  });
+
+  it('I cannot answer my own request', () => {
+    const mine = state([card('a', { owner: 'partner', request: 'take', requestedBy: 'me' })]);
+    expect(deckReducer(mine, { type: 'accept', id: 'a' })).toBe(mine);
+  });
+
+  it('I can ask for a card on my partner’s deck', () => {
+    const s = deckReducer(state([card('a', { owner: 'partner', status: 'active' })]), { type: 'ask_for', id: 'a' });
+    expect(s.cards[0]).toMatchObject({ owner: 'partner', request: 'give', requestedBy: 'me' });
+  });
+});
+
+describe('my deck', () => {
+  it('done closes the card and adds a story card to the shared album', () => {
+    const s = deckReducer(state([card('a', { owner: 'me', status: 'active' })]), { type: 'done', id: 'a' });
+    expect(s.cards[0].status).toBe('done');
+    expect(s.album[0]).toMatchObject({ id: 'a', together: false });
+    expect(deckCards(s)).toHaveLength(0);
   });
 
   it('a done card cannot be closed twice', () => {
-    const once = deckReducer(state([card('a')]), { type: 'done', id: 'a' });
+    const once = deckReducer(state([card('a', { owner: 'me', status: 'active' })]), { type: 'done', id: 'a' });
     expect(deckReducer(once, { type: 'done', id: 'a' })).toBe(once);
+  });
+
+  it('back to table works for my cards and shared ones, not my partner’s', () => {
+    expect(deckReducer(state([card('a', { owner: 'me', status: 'active' })]), { type: 'table', id: 'a' }).cards[0].owner).toBe('table');
+    expect(deckReducer(state([card('a', { owner: 'together', status: 'active' })]), { type: 'table', id: 'a' }).cards[0].owner).toBe('table');
+    const theirs = state([card('a', { owner: 'partner', status: 'active' })]);
+    expect(deckReducer(theirs, { type: 'table', id: 'a' })).toBe(theirs);
+  });
+
+  it('delete removes the card', () => {
+    expect(deckReducer(state([card('a'), card('b')]), { type: 'delete', id: 'a' }).cards.map((c) => c.id)).toEqual(['b']);
+  });
+
+  it('waiting cards stay on my deck', () => {
+    expect(deckCards(state([card('a', { owner: 'me', status: 'waiting' })]))).toHaveLength(1);
   });
 });
 
 describe('undo window', () => {
   it('restores the previous cards and album', () => {
     const start = state([card('a')]);
-    const traded = deckReducer(start, { type: 'trade', id: 'a' });
-    const back = deckReducer(traded, { type: 'undo' });
+    const back = deckReducer(deckReducer(start, { type: 'ask', id: 'a' }), { type: 'undo' });
     expect(back.cards).toEqual(start.cards);
     expect(back.undo).toBeNull();
   });
 });
 
-describe('open table', () => {
-  it('anyone can grab a table card and it becomes theirs', () => {
-    const s = deckReducer(state([card('a', { owner: 'table', traded: true })]), { type: 'grab', id: 'a' });
-    expect(s.cards[0]).toMatchObject({ owner: 'me', status: 'active' });
-  });
-});
-
-describe('seeing every card', () => {
-  it('skipping a deal sends it to the back undecided, so the next card shows', () => {
-    const s = deckReducer(state([card('a'), card('b')]), { type: 'later', id: 'a' });
-    expect(myDeck(s).map((c) => c.id)).toEqual(['b', 'a']);
-    expect(s.cards.find((c) => c.id === 'a')?.status).toBe('deal');
-  });
-
-  it('the full list holds every open card of mine, past the five on the deck', () => {
-    const s = state([...Array.from({ length: 7 }, (_, i) => card(`c${i}`)), card('t', { owner: 'together', status: 'active' }), card('p', { owner: 'partner' })]);
-    expect(myCards(s)).toHaveLength(8);
-  });
-});
-
-describe('deck size', () => {
-  it('shows at most five cards and counts the rest as later', () => {
-    const s = state(Array.from({ length: 8 }, (_, i) => card(`c${i}`)));
-    expect(myDeck(s)).toHaveLength(MAX_VISIBLE);
-    expect(laterCount(s)).toBe(3);
+describe('filters', () => {
+  it('splits this week from later', () => {
+    const cards = [card('a'), card('b', { when: 'next week' }), card('c', { when: 'tomorrow' }), card('d', { when: 'next month' })];
+    expect(byWhen(cards, 'week').map((c) => c.id)).toEqual(['a', 'c']);
+    expect(byWhen(cards, 'later').map((c) => c.id)).toEqual(['b', 'd']);
+    expect(byWhen(cards, 'all')).toHaveLength(4);
   });
 });
 
 describe('balance', () => {
   it('is level when both carry the same weight', () => {
-    expect(balanceTilt(state([card('a'), card('b', { owner: 'partner' })]))).toBe(0);
+    expect(balanceTilt(state([card('a', { owner: 'me', status: 'active' }), card('b', { owner: 'partner', status: 'active' })]))).toBe(0);
   });
-  it('tilts toward me when I carry more, and ignores done cards', () => {
-    const t = balanceTilt(state([card('a', { weight: 3 }), card('b', { owner: 'partner', weight: 1 }), card('c', { owner: 'partner', status: 'done', weight: 9 })]));
+  it('tilts toward me when I carry more, and ignores done cards and open requests', () => {
+    const t = balanceTilt(state([
+      card('a', { owner: 'me', weight: 3, status: 'active' }), card('b', { owner: 'partner', weight: 1, status: 'active' }),
+      card('c', { owner: 'partner', status: 'done', weight: 9 }), card('d', { owner: 'partner', weight: 9, request: 'take', requestedBy: 'me' }),
+    ]));
     expect(t).toBeLessThan(0);
   });
 });
 
-describe('drop parsing', () => {
+describe('adding', () => {
   it('splits one line into several cards, including Hinglish joiners', () => {
     expect(splitDrop('kal electrician ko bulana hai aur parcel return karna hai')).toEqual(['kal electrician ko bulana hai', 'parcel return karna hai']);
     expect(splitDrop('bedroom light flickering, call electrician, return the parcel')).toHaveLength(3);
@@ -125,5 +137,10 @@ describe('drop parsing', () => {
     expect(fakeSort('kal electrician ko bulana hai')).toMatchObject({ bucket: 'Home', effort: '15 min call', when: 'tomorrow' });
     expect(fakeSort('renew car insurance')).toMatchObject({ bucket: 'Admin', effort: '10 min' });
     expect(fakeSort('plan the goa trip')).toMatchObject({ bucket: 'Us' });
+  });
+  it('lands on the table by default, or on my deck; a surprise only on my deck', () => {
+    expect(fakeSort('return the parcel')).toMatchObject({ owner: 'table', status: 'deal', surprise: false });
+    expect(fakeSort('pottery class', 'mine', true)).toMatchObject({ owner: 'me', status: 'active', surprise: true });
+    expect(fakeSort('pottery class', 'table', true).surprise).toBe(false);
   });
 });

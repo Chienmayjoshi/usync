@@ -1,13 +1,15 @@
+import { Heart } from 'phosphor-react-native';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { HeaderAvatars } from '@/features/account/HeaderAvatars';
 import { useNames } from '@/features/account/account';
-import { balanceTilt, type Card, tableCards } from '@/features/deck/model';
+import { balanceTilt, type Card, partnerDeck } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
-import { useMoves } from '@/features/deck/useMoves';
 import { useSync } from '@/features/sync/sync';
+import { Legend, MonthCard, type WeekBar } from '@/features/sync/WeekBars';
+import { weekStart } from '@/features/sync/weeks';
 import { errorText } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
@@ -16,147 +18,180 @@ import { PopButton } from '@/ui/PopButton';
 import { Screen } from '@/ui/Screen';
 import { Seesaw } from '@/ui/Seesaw';
 import { Segmented } from '@/ui/Segmented';
+import { Sheet } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
-type Step = 'replay' | 'appreciate' | 'next';
-const STEPS: { value: Step; label: string }[] = [
-  { value: 'replay', label: '1 Replay' },
-  { value: 'appreciate', label: '2 Thanks' },
-  { value: 'next', label: '3 Next' },
-];
+function balanceCopy(tilt: number, partner: string | null) {
+  if (!partner) return 'Just you for now.';
+  if (Math.abs(tilt) < 0.2) return 'Even keel this week.';
+  return tilt < 0 ? 'You’re carrying more this week.' : `${partner}’s carrying more this week.`;
+}
 
-// Sunday Sync, any day of the week: replay what got done, one appreciation each (sealed until
-// both write), then the open table as next week's hand. One step on screen at a time.
+/** Sync: the week's balance, thanks for what got done, and the album of every week so far. */
 export default function SyncScreen() {
   const t = useTheme();
-  const styles = useStyles();
+  const s = useStyles();
   const { state } = useDeck();
   const names = useNames();
-  const sync = useSync();
-  const [step, setStep] = useState<Step>('replay');
-  const at = STEPS.findIndex((s) => s.value === step);
-  const next = STEPS[at + 1];
+  const [view, setView] = useState<'thanks' | 'album'>('thanks');
+  const tilt = balanceTilt(state);
+  const on = partnerDeck(state).find((c) => c.status === 'active' && !c.request);
 
   return (
     <Screen title="Sync" right={<HeaderAvatars />}>
-      <View style={styles.week}>
-        <Seesaw tilt={balanceTilt(state)} scale={0.6} colors={names.hex} />
-        <Text variant="caption" color={t.color.text.secondary}>Sunday sync  ·  this week</Text>
+      <View style={s.balance}>
+        <Text variant="title/lg" style={s.center}>{balanceCopy(tilt, names.partner)}</Text>
+        {on && names.partner && <Text variant="caption" color={t.color.text.secondary} style={s.center}>{`${names.partner} is on ${on.title.toLowerCase()}`}</Text>}
+        <Seesaw tilt={tilt} scale={0.8} colors={names.hex} />
+        <View style={s.rule} />
       </View>
-      <Segmented value={step} onChange={setStep} options={STEPS} />
-
-      <Animated.View key={step} entering={FadeIn.duration(220)} style={styles.step}>
-        {step === 'replay' && <Replay week={sync.week} />}
-        {step === 'appreciate' && <Appreciate partner={names.partner} sync={sync} />}
-        {step === 'next' && <NextHand />}
+      <Segmented value={view} onChange={setView} options={[{ value: 'thanks', label: 'Thanks' }, { value: 'album', label: 'Album' }]} />
+      <Animated.View key={view} entering={FadeIn.duration(220)} style={s.body}>
+        {view === 'thanks' ? <Thanks /> : <Album />}
       </Animated.View>
-
-      {next && <PopButton label={`Next: ${next.label.slice(2)}`} tone="ghost" onPress={() => { haptics.tick(); setStep(next.value); }} />}
-      <Text variant="caption" color={t.color.text.muted} style={styles.centerText}>{`${sync.weeks} ${sync.weeks === 1 ? 'week' : 'weeks'} in sync. A missed week pauses it, never resets it.`}</Text>
     </Screen>
   );
 }
 
-const SHOW = 4;
-
-/** The week's closed jobs, by who carried them. Long weeks fold, so the step stays one screen. */
-function Replay({ week }: { week: string }) {
+function Thanks() {
   const t = useTheme();
-  const styles = useStyles();
-  const { state } = useDeck();
+  const s = useStyles();
+  const { state, thanked, askHeart } = useDeck();
   const names = useNames();
-  const [open, setOpen] = useState<string | null>(null);
-  const weekStartMs = Date.parse(`${week}T00:00:00`);
-  const done = state.cards.filter((c) => c.status === 'done' && c.doneAt && Date.parse(c.doneAt) >= weekStartMs);
-  if (done.length === 0) return <Text variant="body/lg" color={t.color.text.secondary}>Nothing closed yet this week. That counts as a week too.</Text>;
+  const sync = useSync();
+  const [writing, setWriting] = useState(false);
+  const since = Date.parse(`${sync.week}T00:00:00`);
+  const done = state.cards
+    .filter((c) => c.status === 'done' && c.doneBy === 'partner' && c.doneAt && Date.parse(c.doneAt) >= since)
+    .sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? ''));
+  const them = names.partnerOr;
 
-  const groups: { key: string; label: string; color: string; cards: Card[] }[] = [
-    { key: 'together', label: 'Both of you', color: t.color.accent.tag, cards: done.filter((c) => c.owner === 'together') },
-    { key: 'partner', label: names.partnerOr, color: names.hex.partner, cards: done.filter((c) => c.owner !== 'together' && c.doneBy === 'partner') },
-    { key: 'me', label: names.me, color: names.hex.me, cards: done.filter((c) => c.owner !== 'together' && c.doneBy !== 'partner') },
-  ];
+  if (!names.partner) return <Text variant="body/md" color={t.color.text.secondary}>Thanks open once your partner joins.</Text>;
+
   return (
-    <View style={styles.groups}>
-      {groups.filter((g) => g.cards.length).map((g) => {
-        const all = open === g.key;
-        return (
-          <View key={g.key} style={[styles.group, { borderLeftColor: g.color }]}>
-            <Text variant="label/md" color={g.color}>{g.label}</Text>
-            {(all ? g.cards : g.cards.slice(0, SHOW)).map((c) => <Text key={c.id} variant="title/md">{c.title}</Text>)}
-            {g.cards.length > SHOW && (
-              <PopButton label={all ? 'Fold' : 'Show all'} tone="ghost" onPress={() => setOpen(all ? null : g.key)} style={styles.fold} />
-            )}
-          </View>
-        );
-      })}
+    <>
+      <Text variant="label/md" color={t.color.text.secondary}>{`${them} got these done this week`}</Text>
+      {done.length === 0 && <Text variant="body/md" color={t.color.text.secondary}>Nothing closed yet this week. That counts as a week too.</Text>}
+      {done.map((c) => <DoneRow key={c.id} card={c} sent={thanked.has(c.id)} onSend={() => { haptics.tick(); askHeart(c); }} />)}
+
+      <View style={s.note}>
+        <Image source={require('@/../assets/illustrations/envelope.png')} style={s.envelope} resizeMode="contain" />
+        <View style={s.noteCopy}>
+          {sync.mine && sync.theirs ? (
+            <>
+              <Text variant="label/md" color={t.color.text.secondary}>{`${them} noticed`}</Text>
+              <Text variant="display/accent" style={s.quote}>{`“${sync.theirs.appreciation}”`}</Text>
+            </>
+          ) : sync.mine ? (
+            <Text variant="body/md" color={t.color.text.secondary}>{`Sealed. It opens when ${them} writes theirs, or on Monday either way.`}</Text>
+          ) : (
+            <>
+              <Text variant="title/md">{`Appreciate one thing ${them} did this week.`}</Text>
+              <Pressable onPress={() => setWriting(true)} style={s.write} accessibilityRole="button">
+                <Text variant="button/sm" color={t.color.text.onColor} style={s.writeText}>Write your note</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      </View>
+      {writing && <NoteSheet onClose={() => setWriting(false)} />}
+    </>
+  );
+}
+
+function DoneRow({ card, sent, onSend }: { card: Card; sent: boolean; onSend: () => void }) {
+  const t = useTheme();
+  const s = useStyles();
+  return (
+    <View style={s.row}>
+      <Text variant="title/md" style={s.flex}>{card.title}</Text>
+      {sent ? (
+        <View style={s.sent}><Heart size={14} weight="fill" color={t.color.accent.heart} /><Text variant="caption" color={t.color.text.secondary}>Sent</Text></View>
+      ) : (
+        <Pressable onPress={onSend} style={s.send} accessibilityRole="button" accessibilityLabel={`Send a heart for ${card.title}`}>
+          <Text variant="button" color={t.color.text.onColor}>Send</Text>
+          <Heart size={18} weight="fill" color={t.color.accent.heart} />
+        </Pressable>
+      )}
     </View>
   );
 }
 
-function Appreciate({ partner, sync }: { partner: string | null; sync: ReturnType<typeof useSync> }) {
-  const t = useTheme();
-  const styles = useStyles();
+function NoteSheet({ onClose }: { onClose: () => void }) {
   const toast = useToast();
+  const sync = useSync();
+  const names = useNames();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  if (!partner) return <Text variant="body/md" color={t.color.text.secondary}>Opens once your partner joins.</Text>;
-  if (sync.mine && sync.theirs) {
-    return (
-      <View style={styles.reveal}>
-        <Text variant="label/md" color={t.color.accent.tag}>{`${partner} noticed`}</Text>
-        <Text variant="display/accent" style={styles.quote}>{`“${sync.theirs.appreciation}”`}</Text>
-        <Text variant="caption" color={t.color.text.muted}>{`You wrote: “${sync.mine.appreciation}”`}</Text>
-      </View>
-    );
-  }
-  if (sync.mine) {
-    return <Text variant="body/md" color={t.color.text.secondary}>{`Sealed. It opens when ${partner} writes theirs, or on Monday either way.`}</Text>;
-  }
   const save = async () => {
     setBusy(true);
-    try { await sync.appreciate(text); haptics.success(); } catch (e) { toast({ kind: 'info', title: 'That didn’t save', body: errorText(e) }); } finally { setBusy(false); }
+    try { await sync.appreciate(text); haptics.success(); onClose(); } catch (e) { toast({ kind: 'info', title: 'That didn’t save', body: errorText(e) }); setBusy(false); }
   };
   return (
-    <View style={styles.form}>
-      <Text variant="body/md" color={t.color.text.secondary}>{`The one thing from this week you want ${partner} to know you saw. Hearts for single jobs go out any day from Us.`}</Text>
-      <Field label={`One thing ${partner} did this week`} value={text} onChangeText={setText} placeholder="Thanks for chasing the electrician" multiline maxLength={200} />
-      <PopButton label={busy ? 'Sealing…' : 'Seal it'} tone="negative" disabled={!text.trim() || busy} onPress={save} />
-      <Text variant="caption" color={t.color.text.muted}>{`${partner} sees it only after writing theirs.`}</Text>
-    </View>
+    <Sheet onClose={onClose}>
+      <Field label={`One thing ${names.partnerOr} did this week`} value={text} onChangeText={setText} placeholder="Thanks for chasing the electrician" multiline maxLength={200} autoFocus />
+      <PopButton label={busy ? 'Sealing…' : 'Seal it'} tone="primary" disabled={!text.trim() || busy} onPress={save} />
+    </Sheet>
   );
 }
 
-function NextHand() {
-  const t = useTheme();
-  const styles = useStyles();
+/** Every month so far, newest first, as weekly bars. A dot under each week: did a note go out? */
+function Album() {
+  const s = useStyles();
   const { state } = useDeck();
-  const move = useMoves();
-  const table = tableCards(state);
-  if (table.length === 0) return <Text variant="body/md" color={t.color.text.secondary}>The open table is clear. Nothing left hanging.</Text>;
+  const sync = useSync();
+  const months = new Map<string, Date>();
+  for (const a of state.album) if (a.doneAt) { const d = new Date(a.doneAt); months.set(`${d.getFullYear()}-${d.getMonth()}`, new Date(d.getFullYear(), d.getMonth(), 1)); }
+  const now = new Date();
+  months.set(`${now.getFullYear()}-${now.getMonth()}`, new Date(now.getFullYear(), now.getMonth(), 1));
+  const noted = new Set(sync.entries.filter((e) => e.member === sync.me).map((e) => e.week_start));
+  const thisWeek = weekStart();
+
+  const cards = [...months.values()].sort((a, b) => b.getTime() - a.getTime()).map((first) => {
+    const weeks: WeekBar[] = [];
+    for (let d = new Date(first); d.getMonth() === first.getMonth(); d.setDate(d.getDate() + 7)) {
+      const start = new Date(d);
+      const end = new Date(d); end.setDate(end.getDate() + 7);
+      const count = state.album.filter((a) => a.doneAt && Date.parse(a.doneAt) >= start.getTime() && Date.parse(a.doneAt) < end.getTime() && new Date(a.doneAt).getMonth() === first.getMonth()).length;
+      const wk = weekStart(start);
+      const past = wk < thisWeek;
+      weeks.push({ label: `W${weeks.length + 1}`, count, note: noted.has(wk) ? 'added' : past && start <= now ? 'missed' : null });
+    }
+    return { key: first.toISOString(), month: first.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }).toUpperCase(), total: weeks.reduce((n, w) => n + w.count, 0), weeks };
+  });
+
   return (
-    <View style={styles.groups}>
-      <Text variant="body/md" color={t.color.text.secondary}>Still on the open table. Pick what you’ll carry next week.</Text>
-      {table.map((c) => (
-        <View key={c.id} style={styles.nextRow}>
-          <Text variant="title/md" style={styles.flex}>{c.title}</Text>
-          <PopButton label="I’ll take it" tone="primary" small onPress={() => move(c, 'grab')} />
-        </View>
-      ))}
-    </View>
+    <>
+      <View style={s.albumHead}>
+        <Text variant="title/lg">{`${sync.weeks} ${sync.weeks === 1 ? 'week' : 'weeks'} in sync`}</Text>
+        <Legend />
+      </View>
+      {cards.map((c) => <MonthCard key={c.key} month={c.month} total={c.total} weeks={c.weeks} />)}
+    </>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  week: { alignItems: 'center', gap: 4, backgroundColor: t.color.bg.sync, borderRadius: t.radius.lg, paddingVertical: 12 },
-  centerText: { textAlign: 'center' },
+  balance: { alignItems: 'center', gap: 2 },
+  rule: { alignSelf: 'stretch', height: 1, backgroundColor: t.color.text.primary, opacity: 0.6, marginTop: -6 },
+  center: { textAlign: 'center' },
+  body: { gap: 10 },
   flex: { flex: 1 },
-  step: { gap: 12, minHeight: 160 },
-  groups: { gap: 12 },
-  group: { gap: 8, backgroundColor: t.color.bg.raised, borderRadius: t.radius.md, borderLeftWidth: 4, padding: 14, boxShadow: t.shadow.row },
-  fold: { alignSelf: 'flex-start' },
-  reveal: { gap: 8, backgroundColor: t.color.bg.surface, borderRadius: t.radius.lg, padding: 18 },
-  quote: { fontSize: 22, lineHeight: 30 },
-  form: { gap: 10 },
-  nextRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.color.bg.raised, borderRadius: t.radius.md, padding: 12, paddingLeft: 16, boxShadow: t.shadow.row },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.color.bg.sync, borderRadius: t.radius.md,
+    borderWidth: 2, borderColor: t.color.border.card, paddingLeft: 14, paddingRight: 8, minHeight: 64, boxShadow: t.shadow.row,
+  },
+  send: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.color.action.neutral, borderRadius: t.radius.full, paddingHorizontal: 18, height: 40, borderWidth: 2, borderColor: t.color.border.card },
+  sent: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12 },
+  note: {
+    flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: t.color.bg.raised, borderRadius: t.radius.lg,
+    borderWidth: 1, borderColor: t.color.border.subtle, padding: 14, marginTop: 6, boxShadow: t.shadow.card,
+  },
+  envelope: { width: 80, height: 76 },
+  noteCopy: { flex: 1, gap: 8 },
+  quote: { fontSize: 18, lineHeight: 24 },
+  write: { alignSelf: 'flex-start', backgroundColor: '#ED847F', borderRadius: t.radius.full, paddingHorizontal: 16, paddingVertical: 6 },
+  writeText: { textTransform: 'none', fontSize: 15 },
+  albumHead: { gap: 6 },
 }));

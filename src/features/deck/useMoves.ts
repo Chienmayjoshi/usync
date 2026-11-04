@@ -2,45 +2,50 @@ import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
-import type { Card } from './model';
+import type { Card, Move } from './model';
 import { useDeck } from './store';
 
-export type Move = 'take' | 'trade' | 'together' | 'done' | 'later' | 'grab' | 'table';
+export type { Move };
 
-/** Every deck move, from a swipe, a button or the list, with the same haptic and undo banner. */
+/** Every deck move, from a swipe, a drag or a button, with the same haptic and undo banner. */
 export function useMoves() {
   const { dispatch } = useDeck();
   const toast = useToast();
   const names = useNames();
+  const them = names.partnerOr;
 
   const undoable = (title: string, body: string) =>
     toast({ kind: 'info', title, body, action: { label: 'Undo', onPress: () => { haptics.tick(); dispatch({ type: 'undo' }); } }, onExpire: () => dispatch({ type: 'clearUndo' }) });
 
-  return (card: Card, move: Move) => {
+  return (card: Card, move: Move | 'next' | 'delete') => {
     dispatch({ type: move, id: card.id });
     switch (move) {
-      case 'take':
+      case 'next':
+        return haptics.tick();
+      case 'delete':
         haptics.take();
-        return undoable('It’s yours', card.title);
+        return toast({ kind: 'info', title: 'Deleted', body: card.title, ms: 2500 });
       case 'grab':
         haptics.take();
-        return undoable('It’s yours', 'Grabbed from the open table.');
+        return undoable('On your deck', card.title);
+      case 'ask':
+        haptics.trade();
+        return undoable(`Asked ${them}`, `${card.title}. It’s on their deck until they answer.`);
       case 'together':
         haptics.together();
-        return undoable('Doing it together', 'It’s on both decks now. Us shows everything you share.');
-      case 'trade':
+        return undoable(`Asked ${them} to do it together`, card.title);
+      case 'ask_for':
         haptics.trade();
-        return card.traded
-          ? undoable('Passed to the table', 'The trade was used, so it’s up for grabs on Us.')
-          : undoable(`Traded to ${names.partnerOr}`, 'They can take it or pass it to the table.');
+        return undoable(`Asked ${them} for it`, card.title);
+      case 'accept':
+        haptics.take();
+        return undoable(card.request === 'give' ? `Given to ${them}` : card.request === 'together' ? 'Doing it together' : 'On your deck', card.title);
+      case 'decline':
+        haptics.trade();
+        return undoable(card.request === 'give' ? 'You kept it' : 'Back on the table', card.title);
       case 'table':
         haptics.trade();
-        return undoable('On the open table', 'Either of you can grab it from Us.');
-      case 'later':
-        haptics.trade();
-        return card.status === 'deal'
-          ? undoable('Skipped for now', 'It waits at the back of your deck, still yours to decide.')
-          : undoable('Moved to later', 'Out of sight for now. It comes back on its own.');
+        return undoable('Back on the table', card.title);
       case 'done':
         haptics.success();
         return undoable('Done  ·  into the album', card.title);

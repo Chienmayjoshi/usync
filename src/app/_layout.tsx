@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AccountProvider, useAccount } from '@/features/account/account';
 import { DeckProvider } from '@/features/deck/store';
+import { ActivityProvider } from '@/features/notify/activity';
 import { NotificationsBridge } from '@/features/notify/NotificationsBridge';
 import { Hearts } from '@/features/thanks/Hearts';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -44,10 +45,12 @@ function Root() {
         <ToastHost>
           <AccountProvider>
             <DeckProvider>
-              <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
-              <Routes />
-              <NotificationsBridge />
-              <Hearts />
+              <ActivityProvider>
+                <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
+                <Routes />
+                <NotificationsBridge />
+                <Hearts />
+              </ActivityProvider>
             </DeckProvider>
           </AccountProvider>
         </ToastHost>
@@ -78,6 +81,7 @@ function Routes() {
       <Stack.Protected guard={paired}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="activity" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack.Protected>
     </Stack>
   );

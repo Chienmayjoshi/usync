@@ -1,6 +1,5 @@
-import { Heart } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
-import { Modal, View } from 'react-native';
+import { Image, Modal, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -60,7 +59,7 @@ function HeartMoment() {
         <Text variant="display/xl" style={styles.text}>Thank you!</Text>
         <View style={styles.center}>
           <Animated.View entering={ZoomIn.springify().damping(10)} style={pulse}>
-            <Heart size={140} color={t.color.accent.heart} weight="fill" />
+            <Image source={require('@/../assets/illustrations/heart.png')} style={{ width: 198, height: 200 }} resizeMode="contain" />
           </Animated.View>
           <Animated.View entering={FadeIn.delay(200)} style={styles.copy}>
             <Text variant="label/md" color={t.color.text.secondary}>{`${from} sent you a heart`}</Text>

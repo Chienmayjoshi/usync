@@ -44,5 +44,5 @@ export function useSync() {
     await load();
   }, [me, week, load]);
 
-  return { week, mine, theirs, weeks: weeksInSync(entries), appreciate };
+  return { week, mine, theirs, weeks: weeksInSync(entries), appreciate, entries, me: me?.id ?? null };
 }

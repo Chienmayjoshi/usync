@@ -1,187 +1,168 @@
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, Share, View } from 'react-native';
-import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
+import { useState } from 'react';
+import { Image, Share, View } from 'react-native';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAvatars } from '@/features/account/HeaderAvatars';
 import { useAccount, useNames } from '@/features/account/account';
-import { CardActions } from '@/features/deck/CardActions';
-import { CardList } from '@/features/deck/CardList';
-import { type Card, balanceTilt, laterCount, myCards, myDeck, partnerCards, waitingCards } from '@/features/deck/model';
+import { CardStack, type Rect } from '@/features/deck/CardStack';
+import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
+import { MyDeckTray, TRAY_PEEK } from '@/features/deck/MyDeckTray';
 import { useDeck } from '@/features/deck/store';
-import { type SwipeDir, SwipeDeck } from '@/features/deck/SwipeDeck';
-import { PartnerDropZone } from '@/features/deck/tradeTarget';
-import { type Move, useMoves } from '@/features/deck/useMoves';
-import { useOpenDrop } from '@/features/drop/DropSheet';
+import { useMoves } from '@/features/deck/useMoves';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
-import { haptics } from '@/theme/haptics';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { FilterChips } from '@/ui/FilterChips';
 import { PopButton } from '@/ui/PopButton';
-import { Screen } from '@/ui/Screen';
-import { Seesaw } from '@/ui/Seesaw';
 import { Text } from '@/ui/Text';
 
-function balanceCopy(tilt: number, partner: string | null) {
-  if (!partner) return { title: 'Just you for now.', sub: 'Dealing starts when your partner joins.' };
-  if (Math.abs(tilt) < 0.2) return { title: 'Even keel this week.', sub: 'Nobody’s keeping score.' };
-  if (tilt < 0) return { title: 'You’re carrying more this week.', sub: 'The next hands will go lighter on you.' };
-  return { title: `${partner}’s carrying more this week.`, sub: 'A good week to grab something off the table.' };
-}
-
-const SWIPE: Record<'deal' | 'active', Partial<Record<SwipeDir, Move>>> = {
-  deal: { right: 'take', up: 'together', left: 'trade', down: 'later', give: 'trade' },
-  active: { right: 'done', left: 'later', give: 'trade' },
-};
-
-export default function DeckScreen() {
+/**
+ * The Table: everything nobody has claimed yet, as a stack. Drag a card down into My Deck to
+ * take it, swipe up for the next one, right to do it together, left to ask your partner.
+ * My Deck rises from the bottom to show what you carry.
+ */
+export default function TableScreen() {
   const t = useTheme();
-  const styles = useStyles();
+  const s = useStyles();
+  const insets = useSafeAreaInsets();
   const { state, ready } = useDeck();
-  const [updating, setUpdating] = useState<Card | null>(null);
-  const [options, setOptions] = useState<Card | null>(null);
-  const [view, setView] = useState<'deck' | 'all'>('deck');
-  const { inviteCode } = useAccount();
+  const { partner, inviteCode } = useAccount();
   const names = useNames();
-  const openDrop = useOpenDrop();
   const move = useMoves();
-  const cards = myDeck(state);
-  const all = myCards(state);
-  const tilt = balanceTilt(state);
-  const copy = balanceCopy(tilt, names.partner);
-  const waiting = waitingCards(state).filter((c) => c.owner !== 'partner');
-  const partnerOn = partnerCards(state).find((c) => c.status !== 'waiting');
-  const later = laterCount(state);
-  const top = cards[0];
+  const [updating, setUpdating] = useState<Card | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [tableWhen, setTableWhen] = useState<When>('all');
+  const [deckWhen, setDeckWhen] = useState<When>('all');
+  const [headerH, setHeaderH] = useState(150);
+  const open = useSharedValue(0);
+  const rect = useSharedValue<Rect>({ x: -1000, y: -1000, w: 0, h: 0 });
+  const trayReady = useSharedValue(0);
+  const hot = useSharedValue(0);
 
-  const onSwipe = (card: Card, dir: SwipeDir) => {
-    const m = SWIPE[card.status === 'active' ? 'active' : 'deal'][dir];
-    if (m) move(card, m);
-  };
+  const table = tableCards(state);
+  const deck = deckCards(state);
+  const tableShown = byWhen(table, tableWhen);
+  const deckShown = byWhen(deck, deckWhen);
+  const top = insets.top + headerH;
+  const them = names.partnerOr;
 
-  const total = all.length + waiting.length;
+  const counts = (cards: Card[]) => ({ all: cards.length, week: byWhen(cards, 'week').length, later: byWhen(cards, 'later').length });
+  const tc = counts(table);
+  const dc = counts(deck);
+
+  const tableFade = useAnimatedStyle(() => ({ opacity: 1 - open.value * 0.6 }));
 
   return (
-    <Screen
-      title="On table"
-      scroll={false}
-      right={<HeaderAvatars wrapPartner={(n) => <PartnerDropZone>{n}</PartnerDropZone>} />}
-    >
-      <View style={styles.week}>
-        <Seesaw tilt={tilt} scale={0.36} colors={names.hex} />
-        <View style={styles.flex}>
-          <Text variant="title/md">{copy.title}</Text>
-          <Text variant="body/md" color={t.color.text.secondary}>{partnerOn && names.partner ? `${names.partner} is on “${partnerOn.title.toLowerCase()}”.` : copy.sub}</Text>
+    <View style={s.screen}>
+      <View style={[s.header, { paddingTop: insets.top + 8 }]} onLayout={(e) => setHeaderH(e.nativeEvent.layout.height - insets.top)}>
+        <View style={s.titleRow}>
+          <Text variant="display/lg" style={s.flex}>{expanded ? 'My deck' : 'On table'}</Text>
+          <HeaderAvatars />
         </View>
+        {expanded ? (
+          <FilterChips
+            value={deckWhen}
+            onChange={setDeckWhen}
+            glow={t.tones[names.colors.me].glow}
+            options={[{ value: 'all', label: 'My Tasks', count: dc.all }, { value: 'week', label: 'This week', count: dc.week }, { value: 'later', label: 'Later', count: dc.later }]}
+          />
+        ) : (
+          <FilterChips
+            value={tableWhen}
+            onChange={setTableWhen}
+            glow={t.tones[names.colors.me].glow}
+            options={[{ value: 'all', label: 'All Tasks', count: tc.all }, { value: 'week', label: 'This week', count: tc.week }, { value: 'later', label: 'Later', count: tc.later }]}
+          />
+        )}
       </View>
 
-      {!names.partner && inviteCode && <InviteStrip code={inviteCode} />}
-
-      {ready && total > 0 && (
-        <FilterChips
-          value={view}
-          onChange={setView}
-          glow={t.tones[names.colors.me].glow}
-          options={[{ value: 'deck', label: 'My deck', count: cards.length }, { value: 'all', label: 'All cards', count: total }]}
-        />
-      )}
-
-      {!ready ? null : view === 'all' && total > 0 ? (
-        <CardList
-          onOpen={setOptions}
-          groups={[
-            { label: 'Up to you', hint: 'take, trade or share', cards: all.filter((c) => c.status === 'deal') },
-            { label: 'On your plate', cards: all.filter((c) => c.status === 'active' && c.owner === 'me') },
-            { label: 'Together', hint: `on ${names.partner ? `${names.partner}’s` : 'both'} deck too`, cards: all.filter((c) => c.status === 'active' && c.owner === 'together') },
-            { label: 'Waiting on others', cards: waiting },
-          ]}
-        />
-      ) : cards.length && top ? (
-        <View style={styles.deckWrap}>
-          <SwipeDeck cards={cards} onSwipe={onSwipe} onHold={setUpdating} />
-          <View style={styles.bar}>
-            <PopButton label="Options" tone="ghost" onPress={() => { haptics.tick(); setOptions(top); }} />
-            <PopButton
-              label={top.status === 'active' ? 'Done' : 'Take it'}
-              tone="positive"
-              fill
-              onPress={() => move(top, top.status === 'active' ? 'done' : 'take')}
-            />
-          </View>
-          <Text variant="caption" color={t.color.text.muted} style={styles.center}>
-            {`${cards.length - 1 > 0 ? `${cards.length - 1} more behind it` : 'Last card'}${later ? `  ·  ${later} resting in later` : ''}  ·  tap to flip, hold to update`}
-          </Text>
-        </View>
-      ) : state.cards.length === 0 ? (
-        <FirstDrop onDrop={() => openDrop()} />
-      ) : (
-        <HandCleared onDrop={() => openDrop()} />
-      )}
-
-      {view === 'deck' && waiting.length > 0 && (
-        <Pressable style={styles.waiting} onPress={() => setView('all')} accessibilityRole="button">
-          <Text variant="label/md" color={t.color.text.muted}>{`Waiting on others  ·  ${waiting.length}`}</Text>
-          <Text variant="body/md" numberOfLines={1}>{`${waiting[0].title}${waiting.length > 1 ? ' and more' : ''}  ›`}</Text>
-        </Pressable>
-      )}
-      {options && <CardActions card={options} onClose={() => setOptions(null)} onUpdate={setUpdating} />}
-      {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
-    </Screen>
-  );
-}
-
-function HandCleared({ onDrop }: { onDrop: () => void }) {
-  const t = useTheme();
-  const styles = useStyles();
-  const names = useNames();
-  useEffect(() => { haptics.success(); }, []);
-  return (
-    <Animated.View entering={FadeIn.duration(300)} style={styles.cleared}>
-      <Animated.View entering={ZoomIn.springify().damping(12)}>
-        <Seesaw tilt={0} scale={0.9} colors={names.hex} />
+      <Animated.View style={[s.table, { paddingBottom: TRAY_PEEK + 12 }, tableFade]} pointerEvents={expanded ? 'none' : 'auto'}>
+        {!partner && inviteCode && <InviteStrip code={inviteCode} />}
+        {!ready ? null : tableShown.length ? (
+          <CardStack
+            cards={tableShown}
+            actions={{
+              up: { label: 'Next', color: t.color.text.secondary, run: (c) => move(c, 'next') },
+              ...(partner ? {
+                right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
+                left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
+              } : {}),
+            }}
+            drop={{ rect, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
+            onDelete={(c) => move(c, 'delete')}
+            onUpdate={setUpdating}
+          />
+        ) : (
+          <Empty
+            image={require('@/../assets/illustrations/table-clear.png')}
+            title="The Table Is Clear."
+            body={table.length ? 'Nothing here for this filter.' : 'Everything has an owner right now.\nAdd something new, or open your deck.'}
+          />
+        )}
       </Animated.View>
-      <Text variant="display/xl" style={styles.center}>Hand cleared.</Text>
-      <Text variant="body/lg" color={t.color.text.secondary} style={styles.center}>Nothing left on your deck. Your story landed in the album.</Text>
-      <PopButton label="See the album" tone="ghost" onPress={() => router.navigate('/us')} />
-      <PopButton label="Drop something new" tone="cream" onPress={onDrop} />
-    </Animated.View>
+
+      <MyDeckTray open={open} expanded={expanded} setExpanded={setExpanded} top={top} cards={deck} rect={rect} ready={trayReady} hot={hot}>
+        {deckShown.length ? (
+          <CardStack
+            cards={deckShown}
+            actions={{
+              right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
+              left: { label: 'Back to table', color: t.color.action.negative, run: (c) => move(c, 'table') },
+            }}
+            onDelete={(c) => move(c, 'delete')}
+            onUpdate={setUpdating}
+            answer={(c) => (forMe(c) ? { onAccept: () => move(c, 'accept'), onDecline: () => move(c, 'decline') } : undefined)}
+          />
+        ) : (
+          <Empty
+            image={require('@/../assets/illustrations/hand-cleared.png')}
+            title="Hand Cleared."
+            body={deck.length ? 'Nothing here for this filter.' : `Nothing on your deck.\n${table.length} ${table.length === 1 ? 'card is' : 'cards are'} still on the table.`}
+          />
+        )}
+      </MyDeckTray>
+
+      {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
+    </View>
   );
 }
 
-function FirstDrop({ onDrop }: { onDrop: () => void }) {
+function Empty({ image, title, body }: { image: number; title: string; body: string }) {
   const t = useTheme();
-  const styles = useStyles();
+  const s = useStyles();
   return (
-    <View style={styles.cleared}>
-      <Text variant="display/xl" style={styles.center}>The table is clear.</Text>
-      <Text variant="body/lg" color={t.color.text.secondary} style={styles.center}>Drop the first thing on your mind. One line, no dates, no owners.</Text>
-      <PopButton label="Drop something" tone="cream" onPress={onDrop} />
-    </View>
+    <Animated.View entering={FadeIn.duration(300)} style={s.empty}>
+      <Image source={image} style={s.art} resizeMode="contain" />
+      <Text variant="display/xl" style={[s.center, s.emptyTitle]}>{title}</Text>
+      <Text variant="body/md" color={t.color.text.secondary} style={s.center}>{body}</Text>
+    </Animated.View>
   );
 }
 
 function InviteStrip({ code }: { code: string }) {
   const t = useTheme();
-  const styles = useStyles();
+  const s = useStyles();
   const share = () => Share.share({ message: `Join me on usync so we can share the life admin. Open the app and enter this code: ${code}` }).catch(() => undefined);
   return (
-    <View style={styles.invite}>
+    <View style={s.invite}>
       <Text variant="label/md" color={t.color.text.secondary}>Invite your person</Text>
-      <Text variant="display/lg" style={styles.code}>{code}</Text>
-      <Text variant="body/md" color={t.color.text.secondary}>They sign up, then join with this code. Until then, drops wait on your deck.</Text>
-      <PopButton label="Share code" tone="cream" onPress={share} />
+      <Text variant="display/lg" style={s.code}>{code}</Text>
+      <Text variant="body/sm" color={t.color.text.secondary}>Until they join, everything you add lands on your deck.</Text>
+      <PopButton label="Share code" tone="primary" small onPress={share} />
     </View>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  invite: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.color.border.dashed, borderRadius: t.radius.lg, padding: 18, gap: 8 },
-  code: { letterSpacing: 6 },
-  week: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.surface, borderRadius: t.radius.lg, paddingHorizontal: 14, paddingVertical: 10 },
-  flex: { flex: 1, gap: 2 },
-  deckWrap: { gap: 10 },
-  bar: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  waiting: { borderWidth: 1, borderStyle: 'dashed', borderColor: t.color.border.dashed, borderRadius: t.radius.lg, padding: 16, gap: 4 },
-  cleared: { alignItems: 'center', gap: 12, paddingVertical: 24 },
+  screen: { flex: 1, backgroundColor: t.color.bg.canvas },
+  header: { paddingHorizontal: 20, gap: 12, paddingBottom: 8, zIndex: 6, backgroundColor: t.color.bg.canvas },
+  titleRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56 },
+  flex: { flex: 1 },
+  table: { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 12 },
+  empty: { alignItems: 'center', gap: 10 },
+  art: { width: 200, height: 220 },
+  emptyTitle: { textTransform: 'none', fontSize: 26 },
   center: { textAlign: 'center' },
+  invite: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.color.border.dashed, borderRadius: t.radius.lg, padding: 16, gap: 6, alignItems: 'flex-start' },
+  code: { letterSpacing: 6 },
 }));

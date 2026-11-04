@@ -1,11 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Microphone, Stop } from 'phosphor-react-native';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, Switch, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { useAccount, useNames } from '@/features/account/account';
-import { type Card, type DropAssign, fakeSort, splitDrop } from '@/features/deck/model';
+import { type Card, type DropPlace, fakeSort, splitDrop } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { haptics } from '@/theme/haptics';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
@@ -18,6 +18,7 @@ import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
 import { useVoice } from './voice';
+import { VoiceBar } from './VoiceBar';
 
 export type DropMode = 'type' | 'voice';
 
@@ -26,12 +27,7 @@ export const useOpenDrop = () => useContext(Ctx);
 
 type Phase = 'typing' | 'sorting' | 'sorted';
 
-const ASSIGN_KEY = 'usync.drop.assign';
-const ASSIGN_HELP: Record<DropAssign, (partner: string) => string> = {
-  auto: (p) => `Goes to whoever has less on their plate this week. ${p} can take it or trade it.`,
-  me: () => 'Straight onto your deck as yours. Nothing is dealt to anyone.',
-  together: (p) => `On both decks. You and ${p} do it as a pair.`,
-};
+const PLACE_KEY = 'usync.drop.place';
 
 export function DropProvider({ children }: { children: ReactNode }) {
   // A fresh key per open remounts the sheet, so every drop starts from a clean slate.
@@ -52,12 +48,14 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
   const names = useNames();
   const toast = useToast();
   const [text, setText] = useState('');
-  // Remembered between drops: someone dropping their own errands shouldn't re-pick every time.
-  const [assign, setAssign] = useState<DropAssign>('auto');
+  // Remembered between adds: someone adding their own errands shouldn't re-pick every time.
+  const [place, setPlace] = useState<DropPlace>('table');
+  const [surprise, setSurprise] = useState(false);
   useEffect(() => {
-    AsyncStorage.getItem(ASSIGN_KEY).then((v) => { if (v === 'auto' || v === 'me' || v === 'together') setAssign(v); }).catch(() => undefined);
+    AsyncStorage.getItem(PLACE_KEY).then((v) => { if (v === 'table' || v === 'mine') setPlace(v); }).catch(() => undefined);
   }, []);
-  const pickAssign = (v: DropAssign) => { setAssign(v); AsyncStorage.setItem(ASSIGN_KEY, v).catch(() => undefined); };
+  const pickPlace = (v: DropPlace) => { setPlace(v); if (v === 'table') setSurprise(false); AsyncStorage.setItem(PLACE_KEY, v).catch(() => undefined); };
+  const toggleSurprise = (on: boolean) => { haptics.tick(); setSurprise(on); if (on) pickPlace('mine'); };
   const [phase, setPhase] = useState<Phase>('typing');
   const [preview, setPreview] = useState<Card[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -92,23 +90,26 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
     const parts = splitDrop(text);
     if (!parts.length) return;
     haptics.press();
-    const cards = parts.map(fakeSort);
+    const where: DropPlace = partner ? place : 'mine';
+    const cards = parts.map((p) => fakeSort(p, where, surprise));
     setPreview(cards);
     setPhase('sorting');
     // Card appears instantly; sorting resolves without blocking (rule F8).
     timers.current.push(setTimeout(() => { setPhase('sorted'); haptics.tick(); }, 900));
     timers.current.push(setTimeout(() => {
-      dispatch({ type: 'drop', cards, assign });
+      dispatch({ type: 'drop', cards, place: where, surprise });
       haptics.success();
-      const where = !partner || assign === 'me' ? 'It’s on your deck.' : assign === 'together' ? 'It’s on both decks.' : 'Dealt by who has less on their plate. Change it from Us if it’s yours.';
-      toast({ kind: 'info', title: `${cards.length === 1 ? '1 card' : `${cards.length} cards`} sorted`, body: where, ms: 4500 });
+      const body = surprise ? `Only you can see it until it’s done.` : where === 'mine' ? 'It’s on your deck.' : `It’s on the table. You or ${names.partnerOr} can take it.`;
+      toast({ kind: 'info', title: `${cards.length === 1 ? '1 card' : `${cards.length} cards`} added`, body, ms: 4500 });
       onClose();
     }, 2100));
   };
 
   return (
     <Sheet onClose={onClose}>
-      {phase === 'typing' ? (
+      {phase === 'typing' && mode === 'voice' && voice.listening ? (
+        <VoiceBar text={text} onStop={toggleVoice} />
+      ) : phase === 'typing' ? (
         <>
           <Text variant="label/md" color={voice.listening ? t.color.accent.tag : t.color.text.secondary}>{voice.listening ? 'Listening…' : 'Add a task'}</Text>
           <View style={[styles.input, voice.listening && styles.inputLive]}>
@@ -127,20 +128,29 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
           {partner && (
             <View style={styles.who}>
               <Text variant="label/md" color={t.color.text.secondary}>Where does it go?</Text>
-              <Segmented
-                value={assign}
-                onChange={pickAssign}
-                options={[{ value: 'auto', label: 'Fair split' }, { value: 'me', label: 'Just me' }, { value: 'together', label: 'Together' }]}
-              />
-              <Text variant="caption" color={t.color.text.muted}>{ASSIGN_HELP[assign](names.partnerOr)}</Text>
+              <Segmented value={place} onChange={pickPlace} options={[{ value: 'table', label: 'On the table' }, { value: 'mine', label: 'My deck' }]} />
+              <View style={styles.switchRow}>
+                <View style={styles.flex}>
+                  <Text variant="title/md">{`A surprise for ${names.partnerOr}`}</Text>
+                  <Text variant="caption" color={t.color.text.secondary}>Only you can see it until it’s done.</Text>
+                </View>
+                <Switch
+                  value={surprise}
+                  onValueChange={toggleSurprise}
+                  trackColor={{ false: t.color.action.neutral, true: t.color.action.primary }}
+                  thumbColor={t.scheme === 'light' ? '#FFFFFF' : t.color.bg.canvas}
+                  ios_backgroundColor={t.color.action.neutral}
+                  accessibilityLabel={`A surprise for ${names.partnerOr}`}
+                />
+              </View>
             </View>
           )}
           <View style={styles.row}>
-            <PopButton label="Add task" tone="primary" fill onPress={submit} disabled={!text.trim()} />
+            <PopButton label={surprise ? 'Add surprise' : 'Add task'} tone="primary" fill onPress={submit} disabled={!text.trim()} />
             <MicButton listening={voice.listening} onPress={toggleVoice} />
           </View>
           <Text variant="caption" color={t.color.text.muted}>
-            {voice.error ?? voiceNote ?? 'No dates, no owners, no buckets. One line; we’ll sort it. Several things in one line become several cards.'}
+            {voice.error ?? voiceNote ?? 'One line; we’ll sort it. Several things in one line become several cards. Hold + to say it instead.'}
           </Text>
         </>
       ) : (
@@ -200,7 +210,9 @@ const useStyles = makeStyles((t) => ({
   inputLive: { borderColor: t.color.accent.tag },
   inputText: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  who: { gap: 8 },
+  who: { gap: 10 },
+  flex: { flex: 1 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, paddingHorizontal: 14, paddingVertical: 12 },
   micWrap: { width: MIC, height: MIC, alignItems: 'center', justifyContent: 'center' },
   micRing: { position: 'absolute', width: MIC, height: MIC, borderRadius: MIC / 2, borderWidth: 2, borderColor: t.color.action.negative },
   mic: { width: MIC, height: MIC, borderRadius: MIC / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: t.color.action.primary },

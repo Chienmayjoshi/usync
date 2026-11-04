@@ -39,6 +39,9 @@ export type TaskRow = {
   traded: boolean;
   waiting_note: string | null;
   dropped_by: string | null;
+  request: 'take' | 'together' | 'give' | null;
+  requested_by: string | null;
+  surprise: boolean;
   done_by: string | null;
   done_at: string | null;
   sort_at: string;

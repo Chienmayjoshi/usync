@@ -1,15 +1,13 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAccount } from '@/features/account/account';
-import { dealTo, type LoadItem } from '@/lib/fairness';
 import { router } from 'expo-router';
 
 import { type EventRow, errorText, type Side, supabase, type TaskRow, type ThanksRow } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
-import { type Card, type DeckAction, deckReducer, type DeckState, type DropAssign, type Owner, type StoryCard } from './model';
-import { TradeTargetProvider } from './tradeTarget';
+import { type Card, type DeckAction, deckReducer, type DeckState, type DropPlace, type Owner, type StoryCard } from './model';
 
 // The deck lives in Supabase. Moves apply locally first (so swipes feel instant), then the
 // server applies the same rules in deck_move and realtime brings both phones back in line.
@@ -21,8 +19,6 @@ type Deck = {
   /** One line update; `waiting` parks the card off the deck until someone else comes through. */
   addUpdate: (id: string, note: string, waiting: boolean) => Promise<void>;
   resume: (id: string) => Promise<void>;
-  /** The dropper changes who an undecided card is for. Free: no trade is spent. */
-  reassign: (id: string, to: 'me' | 'partner' | 'together') => Promise<void>;
   /** Task ids I already sent a heart for. */
   thanked: Set<string>;
   sendThanks: (id: string, note?: string) => Promise<void>;
@@ -50,18 +46,19 @@ function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string):
     owner: ownerFor(r, side), status: r.status, traded: r.traded, weight: r.weight, story: story.get(r.id) ?? [],
     doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at, waitingNote: r.waiting_note,
     droppedBy: r.dropped_by ? (r.dropped_by === myId ? 'me' : 'partner') : null, createdAt: r.created_at,
+    request: r.request ?? null, requestedBy: r.requested_by ? (r.requested_by === myId ? 'me' : 'partner') : null, surprise: !!r.surprise,
   }));
   const album: StoryCard[] = rows
     .filter((r) => r.status === 'done')
     .sort((x, y) => (y.done_at ?? '').localeCompare(x.done_at ?? ''))
     .map((r) => ({
       id: r.id, title: r.title, when: monthOf(r.done_at), together: r.owner === 'together', bucket: r.bucket,
-      doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null,
+      doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at,
     }));
   return { cards, album };
 }
 
-type Prev = { id: string; owner: TaskRow['owner']; status: TaskRow['status']; traded: boolean; sort_at: string };
+type Prev = { id: string; owner: TaskRow['owner']; status: TaskRow['status']; traded: boolean; sort_at: string; request: TaskRow['request']; requested_by: string | null };
 
 export function DeckProvider({ children }: { children: ReactNode }) {
   const { me, partner } = useAccount();
@@ -143,16 +140,16 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         }
       } else if (dropped.length) {
         const fresh = cards.filter((c) => dropped.includes(c.id));
-        const mine = fresh.filter((c) => c.owner === 'me' || c.owner === 'together').length;
-        const titles = fresh.map((c) => c.title).join(', ');
-        haptics.tick();
-        toast({
-          kind: 'info',
-          title: `${who} dropped ${dropped.length === 1 ? 'something' : `${dropped.length} things`}`,
-          body: `${titles || 'New cards'}${mine ? `. ${mine === fresh.length ? 'Dealt to you.' : `${mine} dealt to you.`}` : '.'}`,
-          ms: 7000,
-          action: { label: 'See', onPress: () => router.navigate(mine ? '/' : '/us') },
-        });
+        if (fresh.length) {
+          haptics.tick();
+          toast({
+            kind: 'info',
+            title: `${who} put ${fresh.length === 1 ? 'something' : `${fresh.length} things`} on the table`,
+            body: fresh.map((c) => c.title).join(', '),
+            ms: 7000,
+            action: { label: 'See', onPress: () => router.navigate('/') },
+          });
+        }
       }
       dropped = [];
       finished = null;
@@ -165,47 +162,39 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     load().catch(() => undefined);
   }, [load, toast]);
 
-  const drop = useCallback(async (cards: Card[], assign: DropAssign = 'auto') => {
+  const drop = useCallback(async (cards: Card[], place: DropPlace, surprise = false) => {
     if (!me?.couple_id || !me.side) return;
-    // Auto deals each new card by load. Before the partner joins, everything waits on my deck.
-    const load: LoadItem[] = rows.map((r) => ({ owner: r.owner, weight: r.weight, at: Date.parse(r.done_at ?? r.created_at), done: r.status === 'done' }));
-    const inserts = cards.map((c) => {
-      const mine = !partner || assign === 'me';
-      const owner: TaskRow['owner'] = mine ? me.side!
-        : assign === 'together' ? 'together'
-          : dealTo(load, me.side!, { together: c.owner === 'together' });
-      load.push({ owner, weight: c.weight, at: Date.now(), done: false });
-      const detail = owner === 'together' ? 'A shared plan, so it’s on both decks.'
-        : !partner ? 'Waiting for your partner to join. Until then it’s yours.'
-          : mine ? 'You dropped it for yourself.'
-            : `Dealt to ${owner === me.side ? me.name : partner.name}: less on their plate this week.`;
-      // A card dropped for myself needs no decision: it goes straight onto my deck as taken.
-      const status: TaskRow['status'] = partner && assign === 'me' ? 'active' : 'deal';
-      return { couple_id: me.couple_id!, title: c.title, raw: c.title, bucket: c.bucket, effort: c.effort, weight: c.weight, when_text: c.when, detail, owner, status, dropped_by: me.id };
-    });
+    // Nothing is dealt any more: a card goes on the shared Table, or straight onto my deck.
+    // Before the partner joins there is no table to share, so everything is mine.
+    const mine = place === 'mine' || !partner;
+    const inserts = cards.map((c) => ({
+      couple_id: me.couple_id!, title: c.title, raw: c.title, bucket: c.bucket, effort: c.effort, weight: c.weight, when_text: c.when,
+      detail: '', owner: mine ? me.side! : 'table', status: mine ? 'active' : 'deal', dropped_by: me.id, surprise: mine && surprise,
+    }));
     const { data, error } = await supabase.from('tasks').insert(inserts).select('id, couple_id');
     if (error) throw error;
-    await supabase.from('task_events').insert(data.map((t) => ({ task_id: t.id, couple_id: t.couple_id, actor: me.id, kind: 'drop', text: `${me.name} dropped it` })));
-  }, [me, partner, rows]);
-
-  const reassign = useCallback(async (id: string, to: 'me' | 'partner' | 'together') => {
-    const { error } = await supabase.rpc('reassign_task', { task: id, to_who: to });
-    if (error) throw error;
-    await load();
-  }, [load]);
+    await supabase.from('task_events').insert(data.map((t) => ({ task_id: t.id, couple_id: t.couple_id, actor: me.id, kind: 'drop', text: `${me.name} added it` })));
+  }, [me, partner]);
 
   const dispatch = useCallback((a: DeckAction) => {
     setState((s) => deckReducer(s, a));
     if (a.type === 'clearUndo') { prev.current = null; return; }
-    if (a.type === 'drop') { drop(a.cards, a.assign).catch(fail); return; }
+    if (a.type === 'drop') { drop(a.cards, a.place, a.surprise).catch(fail); return; }
+    // Next card is a private glance: nothing changes for anyone.
+    if (a.type === 'next') return;
+    if (a.type === 'delete') { prev.current = null; supabase.rpc('delete_task', { task: a.id }).then(({ error }) => error && fail(error)); return; }
     if (a.type === 'undo') {
       const p = prev.current;
       prev.current = null;
-      if (p) supabase.rpc('deck_restore', { task: p.id, prev_owner: p.owner, prev_status: p.status, prev_traded: p.traded, prev_sort: p.sort_at }).then(({ error }) => error && fail(error));
+      if (p) {
+        supabase.rpc('deck_restore_v2', {
+          task: p.id, prev_owner: p.owner, prev_status: p.status, prev_traded: p.traded, prev_sort: p.sort_at, prev_request: p.request, prev_requested_by: p.requested_by,
+        }).then(({ error }) => error && fail(error));
+      }
       return;
     }
     const row = rows.find((r) => r.id === a.id);
-    if (row) prev.current = { id: row.id, owner: row.owner, status: row.status, traded: row.traded, sort_at: row.sort_at };
+    if (row) prev.current = { id: row.id, owner: row.owner, status: row.status, traded: row.traded, sort_at: row.sort_at, request: row.request ?? null, requested_by: row.requested_by ?? null };
     supabase.rpc('deck_move', { task: a.id, move: a.type }).then(({ error }) => error && fail(error));
   }, [drop, fail, rows]);
 
@@ -235,12 +224,12 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ state, dispatch, ready, addUpdate, resume, reassign, thanked, sendThanks, hearts, ackHeart, heartFor, askHeart }),
-    [state, dispatch, ready, addUpdate, resume, reassign, thanked, sendThanks, hearts, ackHeart, heartFor],
+    () => ({ state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor, askHeart }),
+    [state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor],
   );
   return (
     <Ctx.Provider value={value}>
-      <TradeTargetProvider>{children}</TradeTargetProvider>
+      {children}
     </Ctx.Provider>
   );
 }
