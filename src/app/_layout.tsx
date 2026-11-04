@@ -1,11 +1,11 @@
-import { Fraunces_400Regular_Italic, Fraunces_600SemiBold } from '@expo-google-fonts/fraunces';
-import { Manrope_500Medium, Manrope_700Bold, Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
+import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
+import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, DMSans_800ExtraBold } from '@expo-google-fonts/dm-sans';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -13,13 +13,13 @@ import { AccountProvider, useAccount } from '@/features/account/account';
 import { DeckProvider } from '@/features/deck/store';
 import { NotificationsBridge } from '@/features/notify/NotificationsBridge';
 import { Hearts } from '@/features/thanks/Hearts';
-import { theme } from '@/theme/tokens';
+import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { ToastHost } from '@/ui/Toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
-  const [loaded] = useFonts({ Fraunces_600SemiBold, Fraunces_400Regular_Italic, Manrope_500Medium, Manrope_700Bold, Manrope_800ExtraBold });
+  const [loaded] = useFonts({ ArchivoBlack_400Regular, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, DMSans_800ExtraBold });
 
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync().catch(() => undefined);
@@ -28,12 +28,23 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    <ThemeProvider>
+      <Root />
+    </ThemeProvider>
+  );
+}
+
+function Root() {
+  const t = useTheme();
+  // The window behind every screen (seen during transitions and keyboard moves) follows the mode.
+  useEffect(() => { SystemUI.setBackgroundColorAsync(t.color.bg.canvas).catch(() => undefined); }, [t]);
+  return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: t.color.bg.canvas }}>
       <SafeAreaProvider>
         <ToastHost>
           <AccountProvider>
             <DeckProvider>
-              <StatusBar style="light" />
+              <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
               <Routes />
               <NotificationsBridge />
               <Hearts />
@@ -48,12 +59,13 @@ export default function RootLayout() {
 /** Sign in, then a name, then a space; the deck only once all three exist. */
 function Routes() {
   const { session, me, loading } = useAccount();
+  const t = useTheme();
   if (loading) return null;
   const signedIn = !!session;
   const named = signedIn && !!me;
   const paired = named && !!me?.couple_id;
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.color.bg.canvas } }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: t.color.bg.canvas } }}>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
       </Stack.Protected>
@@ -70,5 +82,3 @@ function Routes() {
     </Stack>
   );
 }
-
-const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: theme.color.bg.canvas } });

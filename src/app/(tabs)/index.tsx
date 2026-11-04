@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Share, StyleSheet, View } from 'react-native';
+import { Pressable, Share, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 
 import { HeaderAvatars } from '@/features/account/HeaderAvatars';
@@ -15,11 +15,11 @@ import { type Move, useMoves } from '@/features/deck/useMoves';
 import { useOpenDrop } from '@/features/drop/DropSheet';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { haptics } from '@/theme/haptics';
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { FilterChips } from '@/ui/FilterChips';
 import { PopButton } from '@/ui/PopButton';
 import { Screen } from '@/ui/Screen';
 import { Seesaw } from '@/ui/Seesaw';
-import { Segmented } from '@/ui/Segmented';
 import { Text } from '@/ui/Text';
 
 function balanceCopy(tilt: number, partner: string | null) {
@@ -35,6 +35,8 @@ const SWIPE: Record<'deal' | 'active', Partial<Record<SwipeDir, Move>>> = {
 };
 
 export default function DeckScreen() {
+  const t = useTheme();
+  const styles = useStyles();
   const { state, ready } = useDeck();
   const [updating, setUpdating] = useState<Card | null>(null);
   const [options, setOptions] = useState<Card | null>(null);
@@ -61,8 +63,7 @@ export default function DeckScreen() {
 
   return (
     <Screen
-      kicker={new Date().toLocaleDateString('en-IN', { weekday: 'long' })}
-      title="Your deck"
+      title="On table"
       scroll={false}
       right={<HeaderAvatars wrapPartner={(n) => <PartnerDropZone>{n}</PartnerDropZone>} />}
     >
@@ -70,14 +71,19 @@ export default function DeckScreen() {
         <Seesaw tilt={tilt} scale={0.36} colors={names.hex} />
         <View style={styles.flex}>
           <Text variant="title/md">{copy.title}</Text>
-          <Text variant="body/md" color={theme.color.text.secondary}>{partnerOn && names.partner ? `${names.partner} is on “${partnerOn.title.toLowerCase()}”.` : copy.sub}</Text>
+          <Text variant="body/md" color={t.color.text.secondary}>{partnerOn && names.partner ? `${names.partner} is on “${partnerOn.title.toLowerCase()}”.` : copy.sub}</Text>
         </View>
       </View>
 
       {!names.partner && inviteCode && <InviteStrip code={inviteCode} />}
 
       {ready && total > 0 && (
-        <Segmented value={view} onChange={setView} options={[{ value: 'deck', label: 'Deck' }, { value: 'all', label: `All cards  ·  ${total}` }]} />
+        <FilterChips
+          value={view}
+          onChange={setView}
+          glow={t.tones[names.colors.me].glow}
+          options={[{ value: 'deck', label: 'My deck', count: cards.length }, { value: 'all', label: 'All cards', count: total }]}
+        />
       )}
 
       {!ready ? null : view === 'all' && total > 0 ? (
@@ -97,11 +103,12 @@ export default function DeckScreen() {
             <PopButton label="Options" tone="ghost" onPress={() => { haptics.tick(); setOptions(top); }} />
             <PopButton
               label={top.status === 'active' ? 'Done' : 'Take it'}
-              tone="cream"
+              tone="positive"
+              fill
               onPress={() => move(top, top.status === 'active' ? 'done' : 'take')}
             />
           </View>
-          <Text variant="caption" color={theme.color.text.muted} style={styles.center}>
+          <Text variant="caption" color={t.color.text.muted} style={styles.center}>
             {`${cards.length - 1 > 0 ? `${cards.length - 1} more behind it` : 'Last card'}${later ? `  ·  ${later} resting in later` : ''}  ·  tap to flip, hold to update`}
           </Text>
         </View>
@@ -113,7 +120,7 @@ export default function DeckScreen() {
 
       {view === 'deck' && waiting.length > 0 && (
         <Pressable style={styles.waiting} onPress={() => setView('all')} accessibilityRole="button">
-          <Text variant="label/md" color={theme.color.text.muted}>{`Waiting on others  ·  ${waiting.length}`}</Text>
+          <Text variant="label/md" color={t.color.text.muted}>{`Waiting on others  ·  ${waiting.length}`}</Text>
           <Text variant="body/md" numberOfLines={1}>{`${waiting[0].title}${waiting.length > 1 ? ' and more' : ''}  ›`}</Text>
         </Pressable>
       )}
@@ -124,6 +131,8 @@ export default function DeckScreen() {
 }
 
 function HandCleared({ onDrop }: { onDrop: () => void }) {
+  const t = useTheme();
+  const styles = useStyles();
   const names = useNames();
   useEffect(() => { haptics.success(); }, []);
   return (
@@ -131,8 +140,8 @@ function HandCleared({ onDrop }: { onDrop: () => void }) {
       <Animated.View entering={ZoomIn.springify().damping(12)}>
         <Seesaw tilt={0} scale={0.9} colors={names.hex} />
       </Animated.View>
-      <Text variant="display/lg" style={styles.center}>Hand cleared.</Text>
-      <Text variant="body/lg" color={theme.color.text.secondary} style={styles.center}>Nothing left on your deck. Your story landed in the album.</Text>
+      <Text variant="display/xl" style={styles.center}>Hand cleared.</Text>
+      <Text variant="body/lg" color={t.color.text.secondary} style={styles.center}>Nothing left on your deck. Your story landed in the album.</Text>
       <PopButton label="See the album" tone="ghost" onPress={() => router.navigate('/us')} />
       <PopButton label="Drop something new" tone="cream" onPress={onDrop} />
     </Animated.View>
@@ -140,35 +149,39 @@ function HandCleared({ onDrop }: { onDrop: () => void }) {
 }
 
 function FirstDrop({ onDrop }: { onDrop: () => void }) {
+  const t = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.cleared}>
-      <Text variant="display/lg" style={styles.center}>Empty deck.</Text>
-      <Text variant="body/lg" color={theme.color.text.secondary} style={styles.center}>Drop the first thing on your mind. One line, no dates, no owners.</Text>
+      <Text variant="display/xl" style={styles.center}>The table is clear.</Text>
+      <Text variant="body/lg" color={t.color.text.secondary} style={styles.center}>Drop the first thing on your mind. One line, no dates, no owners.</Text>
       <PopButton label="Drop something" tone="cream" onPress={onDrop} />
     </View>
   );
 }
 
 function InviteStrip({ code }: { code: string }) {
+  const t = useTheme();
+  const styles = useStyles();
   const share = () => Share.share({ message: `Join me on usync so we can share the life admin. Open the app and enter this code: ${code}` }).catch(() => undefined);
   return (
     <View style={styles.invite}>
-      <Text variant="label/md" color={theme.color.text.secondary}>Invite your person</Text>
+      <Text variant="label/md" color={t.color.text.secondary}>Invite your person</Text>
       <Text variant="display/lg" style={styles.code}>{code}</Text>
-      <Text variant="body/md" color={theme.color.text.secondary}>They sign up, then join with this code. Until then, drops wait on your deck.</Text>
+      <Text variant="body/md" color={t.color.text.secondary}>They sign up, then join with this code. Until then, drops wait on your deck.</Text>
       <PopButton label="Share code" tone="cream" onPress={share} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  invite: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.color.border.strong, padding: 16, gap: 8 },
+const useStyles = makeStyles((t) => ({
+  invite: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.color.border.dashed, borderRadius: t.radius.lg, padding: 18, gap: 8 },
   code: { letterSpacing: 6 },
-  week: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.color.bg.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  week: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.surface, borderRadius: t.radius.lg, paddingHorizontal: 14, paddingVertical: 10 },
   flex: { flex: 1, gap: 2 },
   deckWrap: { gap: 10 },
   bar: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  waiting: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.color.border.strong, padding: 14, gap: 4 },
+  waiting: { borderWidth: 1, borderStyle: 'dashed', borderColor: t.color.border.dashed, borderRadius: t.radius.lg, padding: 16, gap: 4 },
   cleared: { alignItems: 'center', gap: 12, paddingVertical: 24 },
   center: { textAlign: 'center' },
-});
+}));

@@ -3,7 +3,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 
 import { forgetPush } from '@/lib/notifications';
 import { type MemberRow, supabase } from '@/lib/supabase';
-import { type PersonColor, tones } from '@/theme/tokens';
+import { type PersonColor, personFace } from '@/theme/tokens';
 
 export type Profile = { name: string; color: PersonColor; avatar: string | null };
 
@@ -142,6 +142,6 @@ export function useNames() {
     initials: { a: initial(me?.name) ?? '?', b: initial(partner?.name) },
     avatars: { a: me?.avatar ?? null, b: partner?.avatar ?? null },
     colors: { me: mine, partner: partnerColorFor(mine, partner?.color) },
-    hex: { me: tones[mine].face, partner: tones[partnerColorFor(mine, partner?.color)].face },
+    hex: { me: personFace(mine), partner: personFace(partnerColorFor(mine, partner?.color)) },
   };
 }

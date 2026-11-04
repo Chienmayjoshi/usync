@@ -1,38 +1,41 @@
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
-type Props = { tilt: number; scale?: number; /** Each person's own color: mine on the left, theirs on the right. */ colors?: { me: string; partner: string } };
+type Props = { tilt: number; scale?: number; /** Each person's own color: mine on the left, theirs on the right. */ colors: { me: string; partner: string } };
 
 /**
- * Shared load as a seesaw. tilt in [-1, 1]; negative sinks my (ember) side.
+ * Shared load as a seesaw. tilt in [-1, 1]; negative sinks my side.
  * Never paired with numbers: the shape is the whole message.
  */
-export function Seesaw({ tilt, scale = 1, colors = { me: theme.color.partner.a, partner: theme.color.partner.b } }: Props) {
+export function Seesaw({ tilt, scale = 1, colors }: Props) {
+  const t = useTheme();
+  const s = useStyles();
   const angle = useSharedValue(0);
   useEffect(() => {
     angle.set(withSpring(tilt * 9, { damping: 9, stiffness: 90 }));
   }, [angle, tilt]);
   const plank = useAnimatedStyle(() => ({ transform: [{ rotate: `${angle.value}deg` }] }));
   const w = 200 * scale;
+  const ball = 24 * scale;
   return (
-    <View style={{ width: w + 20 * scale, height: 110 * scale, alignItems: 'center' }} accessibilityLabel={tilt === 0 ? 'Balanced' : tilt < 0 ? 'Tilted toward you' : 'Tilted toward your partner'}>
-      <Animated.View style={[{ width: w, height: 40 * scale, marginTop: 34 * scale }, plank]}>
-        <View style={[styles.ball, { width: 28 * scale, height: 28 * scale, borderRadius: 14 * scale, left: 6 * scale, backgroundColor: colors.me }]} />
-        <View style={[styles.ball, { width: 28 * scale, height: 28 * scale, borderRadius: 14 * scale, right: 6 * scale, backgroundColor: colors.partner }]} />
-        <View style={[styles.bar, { height: 8 * scale, top: 28 * scale }]} />
+    <View style={{ width: w + 20 * scale, height: 96 * scale, alignItems: 'center' }} accessibilityLabel={tilt === 0 ? 'Balanced' : tilt < 0 ? 'Tilted toward you' : 'Tilted toward your partner'}>
+      <Animated.View style={[{ width: w, height: 36 * scale, marginTop: 28 * scale }, plank]}>
+        <View style={[s.ball, { width: ball, height: ball, borderRadius: ball / 2, left: 8 * scale, backgroundColor: colors.me }]} />
+        <View style={[s.ball, { width: ball, height: ball, borderRadius: ball / 2, right: 8 * scale, backgroundColor: colors.partner }]} />
+        <View style={[s.bar, { height: 6 * scale, top: ball, borderRadius: 3 * scale }]} />
       </Animated.View>
-      <Svg width={48 * scale} height={36 * scale} style={{ marginTop: -2 * scale }}>
-        <Polygon points={`0,${36 * scale} ${24 * scale},0 ${48 * scale},${36 * scale}`} fill={theme.color.pop.creamEdgeDeep} />
+      <Svg width={40 * scale} height={30 * scale} style={{ marginTop: -2 * scale }}>
+        <Polygon points={`0,${30 * scale} ${20 * scale},0 ${40 * scale},${30 * scale}`} fill={t.color.seesaw.fulcrum} />
       </Svg>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   ball: { position: 'absolute', top: 0 },
-  bar: { position: 'absolute', left: 0, right: 0, backgroundColor: theme.color.bg.inverse },
-});
+  bar: { position: 'absolute', left: 0, right: 0, backgroundColor: t.color.seesaw.bar },
+}));

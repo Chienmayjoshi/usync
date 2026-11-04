@@ -1,5 +1,5 @@
 import { type ComponentRef, useEffect, useRef } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { GestureDetector, useCompetingGestures, useLongPressGesture, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
@@ -16,10 +16,10 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { useAccount, useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
-import { theme, tones } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/ui/Text';
 
-import { CARD_DEPTH, DealCard, hintsFor, type People, toneFor } from './DealCard';
+import { DealCard, hintsFor } from './DealCard';
 import { canHandOff, type Card } from './model';
 import { catchBounce, isOver, useTradeTarget } from './tradeTarget';
 
@@ -46,30 +46,28 @@ export function SwipeDeck({ cards, onSwipe, onHold }: Props) {
   const ref = useRef<ComponentRef<typeof View>>(null);
   const measure = () => ref.current?.measureInWindow((x, y, w) => origin.set({ x, y, w }));
   const [top, ...rest] = cards;
-  const colors = useNames().colors;
+  const st = useStyles();
   return (
-    <View ref={ref} onLayout={measure} collapsable={false} style={styles.deck}>
+    <View ref={ref} onLayout={measure} collapsable={false} style={st.deck}>
       {rest.slice(0, 2).reverse().map((c, i, arr) => (
-        <BehindCard key={c.id} card={c} level={arr.length - i} progress={progress} colors={colors} />
+        <BehindCard key={c.id} level={arr.length - i} progress={progress} />
       ))}
       {top && <TopCard key={`${top.id}:${top.story.length}`} card={top} progress={progress} origin={origin} onSwipe={onSwipe} onHold={onHold} />}
     </View>
   );
 }
 
-function BehindCard({ card, level, progress, colors }: { card: Card; level: number; progress: SharedValue<number>; colors: People }) {
-  const tone = tones[toneFor(card, colors)];
+/** Cards waiting their turn peek out above the top one, each a shade darker. */
+function BehindCard({ level, progress }: { level: number; progress: SharedValue<number> }) {
+  const t = useTheme();
+  const st = useStyles();
   const style = useAnimatedStyle(() => {
     // As the top card leaves, the cards behind rise one step.
     const lvl = level - progress.value;
-    return { transform: [{ translateY: lvl * 12 }, { scale: 1 - lvl * 0.04 }], opacity: 1 - lvl * 0.25 };
+    return { transform: [{ translateY: -lvl * 14 }, { scale: 1 - lvl * 0.06 }] };
   });
   return (
-    <Animated.View style={[styles.behind, style]} pointerEvents="none">
-      <View style={[styles.behindFace, { borderColor: tone.accent }]} />
-      <View style={[styles.behindRight, { backgroundColor: tone.edge }]} />
-      <View style={[styles.behindBottom, { backgroundColor: tone.edgeDeep }]} />
-    </Animated.View>
+    <Animated.View style={[st.behind, { backgroundColor: level === 1 ? t.color.bg.stack1 : t.color.bg.stack2 }, style]} pointerEvents="none" />
   );
 }
 
@@ -91,7 +89,9 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
   const canUp = hints.up !== null;
   const canLeft = hints.left !== null;
   const canDown = hints.down !== null;
-  const colors = useNames().colors;
+  const names = useNames();
+  const t = useTheme();
+  const st = useStyles();
   // Only an untraded card can be handed over; after the one trade it goes to the table instead.
   const canGive = !!partner && canHandOff(card) && !card.traded;
 
@@ -224,30 +224,43 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
   const upStamp = useAnimatedStyle(() => ({ opacity: canUp ? calm() * interpolate(ty.value, [-20, -THRESHOLD], [0, 1], Extrapolation.CLAMP) : 0 }));
   const downStamp = useAnimatedStyle(() => ({ opacity: canDown ? calm() * interpolate(ty.value, [20, THRESHOLD], [0, 1], Extrapolation.CLAMP) : 0 }));
 
-  const accent = tones[toneFor(card, colors)].accent;
+  const stamp = (hint: string | null) => {
+    switch (hint) {
+      case 'take it': return { text: 'Take it', color: t.color.action.positive };
+      case 'done': return { text: 'Done', color: t.color.action.positive };
+      case 'together': return { text: 'Do it together', color: t.color.accent.tag };
+      case 'trade': return { text: `Ask ${names.partnerOr}`, color: t.color.action.negative };
+      case 'to the table': return { text: 'Back to table', color: t.color.action.negative };
+      default: return { text: hint ?? '', color: t.color.text.secondary };
+    }
+  };
+  const r = stamp(hints.right);
+  const l = stamp(hints.left);
+  const u = stamp(hints.up);
+  const d = stamp(hints.down);
 
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
-        style={[styles.top, cardStyle]}
+        style={[st.top, cardStyle]}
         onLayout={(e) => cardH.set(e.nativeEvent.layout.height)}
         accessibilityHint={`Swipe right, left, up or down.${canGive ? ' Drag onto your partner to hand it over.' : ''} Tap to flip. Hold to update.`}
       >
         <DealCard card={card} flip={flip} />
-        <Animated.View style={[styles.stamp, styles.stampRight, { borderColor: accent }, rightStamp]} pointerEvents="none">
-          <Text variant="label/md" color={accent}>{hints.right}</Text>
+        <Animated.View style={[st.stamp, st.stampRight, rightStamp]} pointerEvents="none">
+          <Text variant="display/2xl" color={r.color} style={st.stampText}>{r.text}</Text>
         </Animated.View>
-        <Animated.View style={[styles.stamp, styles.stampLeft, leftStamp]} pointerEvents="none">
-          <Text variant="label/md" color={theme.color.text.secondary}>{hints.left}</Text>
+        <Animated.View style={[st.stamp, st.stampLeft, leftStamp]} pointerEvents="none">
+          <Text variant="display/2xl" color={l.color} style={st.stampText}>{l.text}</Text>
         </Animated.View>
         {canUp && (
-          <Animated.View style={[styles.stamp, styles.stampUp, upStamp]} pointerEvents="none">
-            <Text variant="label/md" color={theme.color.together.base}>{hints.up}</Text>
+          <Animated.View style={[st.stamp, st.stampUp, upStamp]} pointerEvents="none">
+            <Text variant="display/2xl" color={u.color} style={st.stampText}>{u.text}</Text>
           </Animated.View>
         )}
         {canDown && (
-          <Animated.View style={[styles.stamp, styles.stampDown, downStamp]} pointerEvents="none">
-            <Text variant="label/md" color={theme.color.text.secondary}>{hints.down}</Text>
+          <Animated.View style={[st.stamp, st.stampDown, downStamp]} pointerEvents="none">
+            <Text variant="display/2xl" color={d.color} style={st.stampText}>{d.text}</Text>
           </Animated.View>
         )}
       </Animated.View>
@@ -255,16 +268,16 @@ function TopCard({ card, progress, origin, onSwipe, onHold }: TopProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  deck: { minHeight: 340, paddingBottom: 28 },
+const useStyles = makeStyles((t) => ({
+  // Top padding leaves room for the cards peeking above.
+  deck: { minHeight: 340, paddingTop: 28 },
   top: { zIndex: 3 },
-  behind: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 28, zIndex: 1 },
-  behindFace: { position: 'absolute', left: 0, top: 0, right: CARD_DEPTH, bottom: CARD_DEPTH, backgroundColor: theme.color.bg.raised, borderWidth: 1.5 },
-  behindRight: { position: 'absolute', right: 0, top: CARD_DEPTH, bottom: 0, width: CARD_DEPTH },
-  behindBottom: { position: 'absolute', left: CARD_DEPTH, right: 0, bottom: 0, height: CARD_DEPTH },
-  stamp: { position: 'absolute', borderWidth: 2, borderColor: theme.color.text.secondary, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.color.bg.canvas },
-  stampRight: { top: 28, left: 24, transform: [{ rotate: '-8deg' }] },
-  stampLeft: { top: 28, right: 30, transform: [{ rotate: '8deg' }] },
-  stampUp: { bottom: 40, alignSelf: 'center', borderColor: theme.color.together.base },
-  stampDown: { top: 28, alignSelf: 'center' },
-});
+  behind: { position: 'absolute', left: 0, right: 0, top: 28, height: 120, borderRadius: t.radius.xl, zIndex: 1 },
+  // Stamps: big upper case words over the card, like the redesign's TAKE IT / DONE / ASK.
+  stamp: { position: 'absolute', left: 12, right: 12, alignItems: 'center' },
+  stampText: { textAlign: 'center', fontSize: 40, lineHeight: 42 },
+  stampRight: { top: '38%', transform: [{ rotate: '-8deg' }] },
+  stampLeft: { top: '38%', transform: [{ rotate: '8deg' }] },
+  stampUp: { top: '30%', transform: [{ rotate: '-4deg' }] },
+  stampDown: { top: '42%' },
+}));

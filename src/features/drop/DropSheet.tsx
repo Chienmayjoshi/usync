@@ -1,14 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Microphone, Stop } from 'phosphor-react-native';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { useAccount, useNames } from '@/features/account/account';
 import { type Card, type DropAssign, fakeSort, splitDrop } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { haptics } from '@/theme/haptics';
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { fonts } from '@/theme/type';
+import { Chip } from '@/ui/Chip';
 import { PopButton } from '@/ui/PopButton';
 import { Segmented } from '@/ui/Segmented';
 import { Sheet } from '@/ui/Sheet';
@@ -43,6 +45,8 @@ export function DropProvider({ children }: { children: ReactNode }) {
 }
 
 function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
+  const t = useTheme();
+  const styles = useStyles();
   const { dispatch } = useDeck();
   const { partner } = useAccount();
   const names = useNames();
@@ -106,13 +110,14 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
     <Sheet onClose={onClose}>
       {phase === 'typing' ? (
         <>
-          <Text variant="label/md" color={theme.color.together.base}>{voice.listening ? 'Listening…' : 'Drop it'}</Text>
+          <Text variant="label/md" color={voice.listening ? t.color.accent.tag : t.color.text.secondary}>{voice.listening ? 'Listening…' : 'Add a task'}</Text>
           <View style={[styles.input, voice.listening && styles.inputLive]}>
             <TextInput
               value={text}
               onChangeText={setText}
               placeholder={mode === 'voice' ? 'Say it like you’d tell them…' : 'bedroom light flickering, call electrician, return the parcel'}
-              placeholderTextColor={theme.color.text.muted}
+              placeholderTextColor={t.color.text.placeholder}
+              keyboardAppearance={t.scheme}
               multiline
               autoFocus={mode === 'type'}
               style={styles.inputText}
@@ -121,26 +126,26 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
           </View>
           {partner && (
             <View style={styles.who}>
-              <Text variant="label/md" color={theme.color.text.muted}>Who’s it for?</Text>
+              <Text variant="label/md" color={t.color.text.secondary}>Where does it go?</Text>
               <Segmented
                 value={assign}
                 onChange={pickAssign}
                 options={[{ value: 'auto', label: 'Fair split' }, { value: 'me', label: 'Just me' }, { value: 'together', label: 'Together' }]}
               />
-              <Text variant="caption" color={theme.color.text.muted}>{ASSIGN_HELP[assign](names.partnerOr)}</Text>
+              <Text variant="caption" color={t.color.text.muted}>{ASSIGN_HELP[assign](names.partnerOr)}</Text>
             </View>
           )}
           <View style={styles.row}>
+            <PopButton label="Add task" tone="primary" fill onPress={submit} disabled={!text.trim()} />
             <MicButton listening={voice.listening} onPress={toggleVoice} />
-            <PopButton label="Drop it" tone="cream" fill onPress={submit} disabled={!text.trim()} />
           </View>
-          <Text variant="caption" color={theme.color.text.muted}>
+          <Text variant="caption" color={t.color.text.muted}>
             {voice.error ?? voiceNote ?? 'No dates, no owners, no buckets. One line; we’ll sort it. Several things in one line become several cards.'}
           </Text>
         </>
       ) : (
         <>
-          <Text variant="label/md" color={theme.color.together.base}>{`1 line → ${preview.length} ${preview.length === 1 ? 'card' : 'cards'}`}</Text>
+          <Text variant="label/md" color={t.color.text.secondary}>{`1 line → ${preview.length} ${preview.length === 1 ? 'card' : 'cards'}`}</Text>
           <Text variant="title/lg">Here{'’'}s how we read it.</Text>
           {preview.map((c) => <SortRow key={c.id} card={c} sorting={phase === 'sorting'} />)}
         </>
@@ -150,6 +155,8 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
 }
 
 function MicButton({ listening, onPress }: { listening: boolean; onPress: () => void }) {
+  const t = useTheme();
+  const styles = useStyles();
   const ring = useSharedValue(0);
   useEffect(() => {
     ring.set(listening ? withRepeat(withSequence(withTiming(1, { duration: 700 }), withTiming(0, { duration: 0 })), -1) : withTiming(0));
@@ -160,14 +167,15 @@ function MicButton({ listening, onPress }: { listening: boolean; onPress: () => 
       <Animated.View style={[styles.micRing, pulse]} pointerEvents="none" />
       <View style={[styles.mic, listening && styles.micOn]}>
         {listening
-          ? <Stop size={20} color={theme.color.text.inverse} weight="fill" />
-          : <Microphone size={22} color={theme.color.text.primary} weight="bold" />}
+          ? <Stop size={20} color={t.color.text.onColor} weight="fill" />
+          : <Microphone size={22} color={t.color.action.onPrimary} weight="bold" />}
       </View>
     </Pressable>
   );
 }
 
 function SortRow({ card, sorting }: { card: Card; sorting: boolean }) {
+  const styles = useStyles();
   const shimmer = useSharedValue(0.35);
   useEffect(() => {
     shimmer.set(withRepeat(withSequence(withTiming(0.9, { duration: 450 }), withTiming(0.35, { duration: 450 })), -1));
@@ -179,28 +187,25 @@ function SortRow({ card, sorting }: { card: Card; sorting: boolean }) {
       <View style={styles.chips}>
         {sorting
           ? [64, 84, 56].map((w) => <Animated.View key={w} style={[styles.ghostChip, { width: w }, s]} />)
-          : [card.bucket, card.effort, card.when].map((g) => (
-              <View key={g} style={styles.chip}><Text variant="label/md" color={theme.color.text.secondary}>{g}</Text></View>
-            ))}
+          : [card.bucket, card.effort, card.when].map((g) => <Chip key={g} label={g} />)}
       </View>
     </View>
   );
 }
 
-const MIC = 52;
+const MIC = 48;
 
-const styles = StyleSheet.create({
-  input: { backgroundColor: theme.color.bg.surface, borderWidth: 1.5, borderColor: theme.color.border.strong, paddingHorizontal: 16, paddingVertical: 12, minHeight: 88 },
-  inputLive: { borderColor: theme.color.together.base },
-  inputText: { color: theme.color.text.primary, fontFamily: 'Manrope_700Bold', fontSize: 17, lineHeight: 22 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+const useStyles = makeStyles((t) => ({
+  input: { backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, borderWidth: 1.5, borderColor: 'transparent', paddingHorizontal: 16, paddingVertical: 12, minHeight: 88 },
+  inputLive: { borderColor: t.color.accent.tag },
+  inputText: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   who: { gap: 8 },
   micWrap: { width: MIC, height: MIC, alignItems: 'center', justifyContent: 'center' },
-  micRing: { position: 'absolute', width: MIC, height: MIC, borderRadius: MIC / 2, borderWidth: 2, borderColor: theme.color.together.base },
-  mic: { width: MIC, height: MIC, borderRadius: MIC / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: theme.color.border.strong, backgroundColor: theme.color.bg.surface },
-  micOn: { backgroundColor: theme.color.together.base, borderColor: theme.color.together.base },
-  sortRow: { backgroundColor: theme.color.bg.surface, borderWidth: 1, borderColor: theme.color.border.subtle, padding: 14, gap: 10 },
+  micRing: { position: 'absolute', width: MIC, height: MIC, borderRadius: MIC / 2, borderWidth: 2, borderColor: t.color.action.negative },
+  mic: { width: MIC, height: MIC, borderRadius: MIC / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: t.color.action.primary },
+  micOn: { backgroundColor: t.color.action.negative },
+  sortRow: { backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, borderWidth: 1, borderColor: t.color.border.subtle, padding: 16, gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.color.border.strong, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  ghostChip: { height: 24, borderRadius: 12, backgroundColor: theme.color.bg.raised },
-});
+  ghostChip: { height: 26, borderRadius: 13, backgroundColor: t.color.bg.sunken },
+}));

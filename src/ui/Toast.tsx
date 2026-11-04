@@ -1,12 +1,11 @@
 import { Heart } from 'phosphor-react-native';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
-import { Edges } from './Edges';
 import { Text } from './Text';
 
 export type ToastSpec = {
@@ -26,16 +25,17 @@ export function ToastHost({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<(ToastSpec & { id: number }) | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
-  const [size, setSize] = useState({ w: 0, h: 0 });
+  const t = useTheme();
+  const s = useStyles();
 
-  const show = useCallback((t: ToastSpec) => {
+  const show = useCallback((spec: ToastSpec) => {
     if (timer.current) clearTimeout(timer.current);
     const id = Date.now();
-    setToast({ ...t, id });
+    setToast({ ...spec, id });
     timer.current = setTimeout(() => {
       setToast((cur) => (cur?.id === id ? null : cur));
-      t.onExpire?.();
-    }, t.ms ?? 5000);
+      spec.onExpire?.();
+    }, spec.ms ?? 5000);
   }, []);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
@@ -45,21 +45,18 @@ export function ToastHost({ children }: { children: ReactNode }) {
     <Ctx.Provider value={show}>
       {children}
       {toast && (
-        <Animated.View key={toast.id} entering={FadeInUp.springify().damping(16)} exiting={FadeOutUp.duration(160)} style={[styles.wrap, { top: insets.top + 8 }]} pointerEvents="box-none">
-          <View style={styles.outer}>
-            <Edges width={size.w} height={size.h} depth={4} edge={thanks ? theme.color.together.edge : theme.color.border.strong} edgeDeep={thanks ? theme.color.together.edgeDeep : theme.color.border.subtle} />
-            <View onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })} style={[styles.face, { borderColor: thanks ? theme.color.together.base : theme.color.border.strong }]}>
-              {thanks && <Heart size={22} color={theme.color.together.base} weight="fill" />}
-              <View style={styles.copy}>
-                <Text variant="label/md" color={thanks ? theme.color.together.base : theme.color.text.muted}>{toast.title}</Text>
-                {!!toast.body && <Text variant={thanks ? 'display/accent' : 'body/md'} style={thanks ? styles.accent : undefined}>{toast.body}</Text>}
-              </View>
-              {toast.action && (
-                <Pressable hitSlop={12} onPress={() => { toast.action?.onPress(); setToast(null); }} accessibilityRole="button" style={styles.action}>
-                  <Text variant="label/md" color={theme.color.text.primary}>{toast.action.label}</Text>
-                </Pressable>
-              )}
+        <Animated.View key={toast.id} entering={FadeInUp.springify().damping(16)} exiting={FadeOutUp.duration(160)} style={[s.wrap, { top: insets.top + 8 }]} pointerEvents="box-none">
+          <View style={s.face}>
+            {thanks && <Heart size={22} color={t.color.accent.heart} weight="fill" />}
+            <View style={s.copy}>
+              <Text variant="label/md" color={thanks ? t.color.accent.heart : t.color.text.secondary}>{toast.title}</Text>
+              {!!toast.body && <Text variant="body/md">{toast.body}</Text>}
             </View>
+            {toast.action && (
+              <Pressable hitSlop={12} onPress={() => { toast.action?.onPress(); setToast(null); }} accessibilityRole="button" style={s.action}>
+                <Text variant="button/sm">{toast.action.label}</Text>
+              </Pressable>
+            )}
           </View>
         </Animated.View>
       )}
@@ -67,11 +64,12 @@ export function ToastHost({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((t) => ({
   wrap: { position: 'absolute', left: 16, right: 16, zIndex: 50 },
-  outer: { paddingRight: 4, paddingBottom: 4 },
-  face: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.color.bg.raised, borderWidth: 1.5, paddingHorizontal: 16, paddingVertical: 14 },
+  face: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.raised, borderRadius: t.radius.lg,
+    borderWidth: 1, borderColor: t.color.border.card, paddingHorizontal: 18, paddingVertical: 14, boxShadow: t.shadow.card,
+  },
   copy: { flex: 1, gap: 2 },
-  accent: { fontSize: 20, lineHeight: 26 },
-  action: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-});
+  action: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderRadius: t.radius.full, backgroundColor: t.color.bg.surface },
+}));

@@ -1,53 +1,71 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { ArrowsClockwise, Cards, type Icon, Intersect } from 'phosphor-react-native';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Cards, Handshake, Heart, type Icon } from 'phosphor-react-native';
+import { Pressable, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
 
+import { DropFab } from '@/features/drop/DropFab';
 import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
 import { Text } from './Text';
 
-const ICONS: Record<string, { icon: Icon; label: string }> = {
-  index: { icon: Cards, label: 'Deck' },
-  us: { icon: Intersect, label: 'Us' },
-  sync: { icon: ArrowsClockwise, label: 'Sync' },
+const ICONS: Record<string, { icon: Icon; label: (partner: string | null) => string }> = {
+  index: { icon: Cards, label: () => 'Table' },
+  us: { icon: Heart, label: (p) => p ?? 'Partner' },
+  sync: { icon: Handshake, label: () => 'Sync' },
 };
 
-/** Three tabs. The active bar uses the viewer's own color. Drop floats above it (DropFab). */
+/** Floating pill: the active tab opens into an icon and a label. Drop (+) sits beside it. */
 export function TabBar({ state, navigateToTab, insets, onHeight }: BottomTabBarProps & { onHeight?: (h: number) => void }) {
+  const t = useTheme();
+  const s = useStyles();
   const names = useNames();
   return (
-    <View>
-      <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 12) }]} onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}>
+    <View
+      style={[s.wrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      pointerEvents="box-none"
+      onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}
+    >
+      <View style={s.pill}>
         {state.routes.map((r, i) => {
           const meta = ICONS[r.name];
           if (!meta) return null;
           const active = state.index === i;
           const IconCmp = meta.icon;
-          const color = active ? theme.color.text.primary : theme.color.text.muted;
+          const label = meta.label(names.partner);
           return (
             <Pressable
               key={r.key}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={meta.label}
+              accessibilityLabel={label}
               onPress={() => { if (!active) { haptics.tick(); navigateToTab(r.key); } }}
-              style={styles.tab}
             >
-              <IconCmp size={24} color={color} weight={active ? 'bold' : 'regular'} />
-              <Text variant="label/md" color={color}>{meta.label}</Text>
-              <View style={[styles.activeBar, { opacity: active ? 1 : 0, backgroundColor: names.hex.me }]} />
+              <Animated.View layout={LinearTransition.springify().damping(18)} style={[s.tab, active && s.active]}>
+                <IconCmp size={24} color={active ? t.color.text.primary : t.color.text.secondary} weight={active ? 'fill' : 'light'} />
+                {active && <Text variant="title/md" numberOfLines={1} style={s.label}>{label}</Text>}
+              </Animated.View>
             </Pressable>
           );
         })}
       </View>
+      <DropFab />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', backgroundColor: theme.color.bg.surface, borderTopWidth: 1, borderTopColor: theme.color.border.subtle, paddingTop: 10 },
-  tab: { flex: 1, alignItems: 'center', gap: 4, minHeight: 48 },
-  activeBar: { width: 20, height: 3 },
-});
+const useStyles = makeStyles((t) => ({
+  wrap: {
+    position: 'absolute', left: 0, right: 0, bottom: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 8,
+  },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, padding: 6, borderRadius: t.radius.full,
+    backgroundColor: t.scheme === 'light' ? 'rgba(242,242,242,0.96)' : 'rgba(30,27,36,0.96)',
+    borderWidth: 1, borderColor: t.color.border.card, boxShadow: t.shadow.card,
+  },
+  tab: { height: 56, minWidth: 56, paddingHorizontal: 16, borderRadius: t.radius.full, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  active: { backgroundColor: t.scheme === 'light' ? 'rgba(255,255,255,0.92)' : t.color.bg.stack2, boxShadow: t.shadow.row },
+  label: { maxWidth: 110 },
+}));

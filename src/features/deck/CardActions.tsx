@@ -2,7 +2,8 @@ import { StyleSheet, View } from 'react-native';
 
 import { useAccount, useNames } from '@/features/account/account';
 import { useDeck } from '@/features/deck/store';
-import { theme, tones } from '@/theme/tokens';
+import { useTheme } from '@/theme/ThemeProvider';
+import { Chip } from '@/ui/Chip';
 import { PopButton } from '@/ui/PopButton';
 import { Sheet } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
@@ -26,7 +27,8 @@ export function CardActions({ card, onClose, onUpdate }: Props) {
   const toast = useToast();
   const names = useNames();
   const move = useMoves();
-  const tone = tones[toneFor(card, names.colors)];
+  const t = useTheme();
+  const tone = t.tones[toneFor(card, names.colors)];
   const act = (m: Move) => { onClose(); move(card, m); };
 
   const deal = card.status === 'deal';
@@ -46,14 +48,12 @@ export function CardActions({ card, onClose, onUpdate }: Props) {
 
   return (
     <Sheet onClose={onClose}>
-      <Text variant="label/md" color={tone.accent}>{label}</Text>
-      <Text variant="title/lg">{card.title}</Text>
+      <Text variant="display/sm" color={tone.ink}>{label}</Text>
+      <Text variant="display/lg">{card.title}</Text>
       <View style={styles.chips}>
-        {[card.bucket, card.effort, card.when].map((g) => (
-          <View key={g} style={styles.chip}><Text variant="label/md" color={theme.color.text.secondary}>{g}</Text></View>
-        ))}
+        {[card.bucket, card.effort, card.when].map((g) => <Chip key={g} label={g} />)}
       </View>
-      {card.status === 'waiting' && !!card.waitingNote && <Text variant="body/md" color={theme.color.text.secondary}>{card.waitingNote}</Text>}
+      {card.status === 'waiting' && !!card.waitingNote && <Text variant="body/md" color={t.color.text.secondary}>{card.waitingNote}</Text>}
 
       <View style={styles.actions}>
         {card.owner === 'table' ? (
@@ -62,7 +62,7 @@ export function CardActions({ card, onClose, onUpdate }: Props) {
           <PopButton label="They came through: back on my deck" tone="cream" onPress={() => { onClose(); resume(card.id).catch(() => undefined); }} />
         ) : deal && !theirs ? (
           <>
-            <PopButton label="Take it" tone="cream" onPress={() => act('take')} />
+            <PopButton label="Take it" tone="positive" onPress={() => act('take')} />
             {!!partner && <PopButton label="Do it together" tone="gold" onPress={() => act('together')} />}
           </>
         ) : null}
@@ -78,13 +78,12 @@ export function CardActions({ card, onClose, onUpdate }: Props) {
           <PopButton label={deal ? 'Skip for now' : 'Later'} tone="ghost" onPress={() => act('later')} />
         )}
       </View>
-      {handOff && card.traded && <Text variant="caption" color={theme.color.text.muted}>This card already used its one trade, so it can only go to the table.</Text>}
+      {handOff && card.traded && <Text variant="caption" color={t.color.text.muted}>This card already used its one trade, so it can only go to the table.</Text>}
     </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 1, borderStyle: 'dashed', borderColor: theme.color.border.strong, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   actions: { gap: 8, marginTop: 4 },
 });

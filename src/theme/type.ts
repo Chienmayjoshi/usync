@@ -1,25 +1,38 @@
 import type { TextStyle } from 'react-native';
 
-// Mirrors the Figma text styles. Letter spacing converted from % to points.
+// Display mirrors Figma's Roc Grotesk ExtraBold (commercial). Archivo Black is a free stand in
+// with the same heavy, upper case grotesque feel; swap the file here to switch everywhere.
 export const fonts = {
-  displaySemiBold: 'Fraunces_600SemiBold',
-  displayItalic: 'Fraunces_400Regular_Italic',
-  uiMedium: 'Manrope_500Medium',
-  uiBold: 'Manrope_700Bold',
-  uiExtraBold: 'Manrope_800ExtraBold',
+  display: 'ArchivoBlack_400Regular',
+  uiRegular: 'DMSans_400Regular',
+  uiMedium: 'DMSans_500Medium',
+  uiSemiBold: 'DMSans_600SemiBold',
+  uiBold: 'DMSans_700Bold',
+  uiExtraBold: 'DMSans_800ExtraBold',
 } as const;
 
+const display = (size: number, lineHeight: number, letterSpacing = 0): TextStyle => ({
+  fontFamily: fonts.display, fontSize: size, lineHeight, letterSpacing, textTransform: 'uppercase',
+});
+
 export const type = {
-  'display/2xl': { fontFamily: fonts.displaySemiBold, fontSize: 64, lineHeight: 64, letterSpacing: -1.6 },
-  'display/xl': { fontFamily: fonts.displaySemiBold, fontSize: 44, lineHeight: 48, letterSpacing: -0.66 },
-  'display/lg': { fontFamily: fonts.displaySemiBold, fontSize: 32, lineHeight: 36, letterSpacing: -0.32 },
-  'display/accent': { fontFamily: fonts.displayItalic, fontSize: 26, lineHeight: 32, letterSpacing: -0.13 },
-  'title/lg': { fontFamily: fonts.uiBold, fontSize: 22, lineHeight: 28, letterSpacing: -0.11 },
-  'title/md': { fontFamily: fonts.uiBold, fontSize: 17, lineHeight: 22, letterSpacing: -0.03 },
-  'body/lg': { fontFamily: fonts.uiMedium, fontSize: 16, lineHeight: 24 },
+  // Display: upper case, for card titles, screen titles, stamps.
+  'display/2xl': display(44, 44, -0.5),
+  'display/xl': display(26, 29, -0.3),
+  'display/lg': display(20, 24),
+  'display/md': display(16, 19),
+  'display/sm': display(12, 15, 0.3),
+  // Kept for quotes and thanks: a large, calm sentence.
+  'display/accent': { fontFamily: fonts.uiMedium, fontSize: 22, lineHeight: 30, letterSpacing: -0.2 },
+  'title/lg': { fontFamily: fonts.uiSemiBold, fontSize: 22, lineHeight: 28, letterSpacing: -0.3 },
+  'title/md': { fontFamily: fonts.uiSemiBold, fontSize: 16, lineHeight: 22 },
+  'body/lg': { fontFamily: fonts.uiMedium, fontSize: 16, lineHeight: 22 },
   'body/md': { fontFamily: fonts.uiMedium, fontSize: 14, lineHeight: 20 },
-  'label/md': { fontFamily: fonts.uiExtraBold, fontSize: 12, lineHeight: 16, letterSpacing: 0.96, textTransform: 'uppercase' },
-  caption: { fontFamily: fonts.uiMedium, fontSize: 12, lineHeight: 16 },
+  'body/sm': { fontFamily: fonts.uiRegular, fontSize: 13, lineHeight: 18 },
+  'label/md': { fontFamily: fonts.uiSemiBold, fontSize: 12, lineHeight: 16, letterSpacing: 0.4, textTransform: 'uppercase' },
+  button: { fontFamily: fonts.uiBold, fontSize: 16, lineHeight: 20 },
+  'button/sm': { fontFamily: fonts.uiExtraBold, fontSize: 12, lineHeight: 16, letterSpacing: 0.4, textTransform: 'uppercase' },
+  caption: { fontFamily: fonts.uiRegular, fontSize: 12, lineHeight: 16 },
 } satisfies Record<string, TextStyle>;
 
 export type TypeVariant = keyof typeof type;

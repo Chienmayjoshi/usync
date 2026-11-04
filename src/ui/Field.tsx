@@ -1,23 +1,37 @@
-import { StyleSheet, TextInput, type TextInputProps, View } from 'react-native';
+import { TextInput, type TextInputProps, View } from 'react-native';
 
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { fonts } from '@/theme/type';
 
 import { Text } from './Text';
 
-/** Labelled single line input in the app's style. */
-export function Field({ label, ...input }: TextInputProps & { label: string }) {
+/** Labelled input on a soft grey well, as in the redesign's sheets. */
+export function Field({ label, style, ...input }: TextInputProps & { label: string }) {
+  const t = useTheme();
+  const s = useStyles();
   return (
-    <View style={styles.wrap}>
-      <Text variant="label/md" color={theme.color.text.muted}>{label}</Text>
-      <TextInput placeholderTextColor={theme.color.text.muted} style={styles.input} {...input} />
+    <View style={s.wrap}>
+      <Text variant="label/md" color={t.color.text.secondary}>{label}</Text>
+      <TextInput
+        placeholderTextColor={t.color.text.placeholder}
+        keyboardAppearance={t.scheme}
+        selectionColor={t.color.text.primary}
+        style={[s.input, style]}
+        {...input}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { gap: 6 },
+export const useInputStyles = makeStyles((t) => ({
+  well: { backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, paddingHorizontal: 14, paddingVertical: 12 },
+  text: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22 },
+}));
+
+const useStyles = makeStyles((t) => ({
+  wrap: { gap: 8 },
   input: {
-    backgroundColor: theme.color.bg.surface, borderWidth: 1.5, borderColor: theme.color.border.strong,
-    color: theme.color.text.primary, fontFamily: 'Manrope_700Bold', fontSize: 17, paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: t.color.bg.surface, borderRadius: t.radius.md,
+    color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, paddingHorizontal: 14, paddingVertical: 12,
   },
-});
+}));

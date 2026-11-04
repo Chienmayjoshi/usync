@@ -1,6 +1,6 @@
 import { Heart } from 'phosphor-react-native';
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, View } from 'react-native';
+import { Modal, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,8 +9,9 @@ import type { Card } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { errorText } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
-import { theme } from '@/theme/tokens';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Field } from '@/ui/Field';
+import { Glow } from '@/ui/Glow';
 import { PopButton } from '@/ui/PopButton';
 import { Sheet } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
@@ -33,6 +34,8 @@ export function Hearts() {
  * away in five seconds is wrong for the one moment the product is built around.
  */
 function HeartMoment() {
+  const t = useTheme();
+  const styles = useStyles();
   const { hearts, ackHeart, state } = useDeck();
   const names = useNames();
   const insets = useSafeAreaInsets();
@@ -51,23 +54,27 @@ function HeartMoment() {
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent navigationBarTranslucent onRequestClose={() => ackHeart(heart.id)}>
       <View style={[styles.moment, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 24 }]}>
+        <View style={styles.blush} pointerEvents="none">
+          <Glow colors={['#FCD3D1', '#FFE3E0']} placement="center" opacity={t.scheme === 'light' ? 1 : 0.35} />
+        </View>
+        <Text variant="display/xl" style={styles.text}>Thank you!</Text>
         <View style={styles.center}>
           <Animated.View entering={ZoomIn.springify().damping(10)} style={pulse}>
-            <Heart size={112} color={theme.color.together.base} weight="fill" />
+            <Heart size={140} color={t.color.accent.heart} weight="fill" />
           </Animated.View>
           <Animated.View entering={FadeIn.delay(200)} style={styles.copy}>
-            <Text variant="label/md" color={theme.color.together.base}>{`${from} sent you a heart`}</Text>
-            {card && <Text variant="title/lg" style={styles.text}>{`for “${card.title}”`}</Text>}
+            <Text variant="label/md" color={t.color.text.secondary}>{`${from} sent you a heart`}</Text>
+            {card && <Text variant="title/md" style={styles.text}>{`for “${card.title}”`}</Text>}
             {heart.note ? (
-              <Text variant="display/accent" style={[styles.text, styles.note]}>{`“${heart.note}”`}</Text>
+              <Text variant="display/accent" color={t.color.text.secondary} style={[styles.text, styles.note]}>{`“${heart.note}”`}</Text>
             ) : (
-              <Text variant="body/lg" color={theme.color.text.secondary} style={styles.text}>They noticed. That’s the whole point.</Text>
+              <Text variant="body/lg" color={t.color.text.secondary} style={styles.text}>They noticed. That’s the whole point.</Text>
             )}
           </Animated.View>
         </View>
         <View style={styles.actions}>
-          {hearts.length > 1 && <Text variant="caption" color={theme.color.text.muted} style={styles.text}>{`${hearts.length - 1} more waiting`}</Text>}
-          <PopButton label={hearts.length > 1 ? 'Next heart' : 'Got it'} tone="gold" onPress={() => { haptics.take(); ackHeart(heart.id); }} />
+          {hearts.length > 1 && <Text variant="caption" color={t.color.text.muted} style={styles.text}>{`${hearts.length - 1} more waiting`}</Text>}
+          <PopButton label={hearts.length > 1 ? 'Next heart' : 'Got it'} tone="primary" onPress={() => { haptics.take(); ackHeart(heart.id); }} />
         </View>
       </View>
     </Modal>
@@ -82,6 +89,7 @@ function SendHeartHost() {
 
 /** One tap heart, with an optional line. Any day of the week, not only at Sunday Sync. */
 function SendHeart({ card, onClose }: { card: Card; onClose: () => void }) {
+  const t = useTheme();
   const { sendThanks } = useDeck();
   const names = useNames();
   const toast = useToast();
@@ -101,19 +109,20 @@ function SendHeart({ card, onClose }: { card: Card; onClose: () => void }) {
   };
   return (
     <Sheet onClose={onClose}>
-      <Text variant="label/md" color={theme.color.together.base}>{`Thank ${names.partnerOr}`}</Text>
-      <Text variant="title/lg">{card.title}</Text>
+      <Text variant="label/md" color={t.color.accent.heart}>{`Thank ${names.partnerOr}`}</Text>
+      <Text variant="display/md">{card.title}</Text>
       <Field label="Add a line (optional)" value={note} onChangeText={setNote} placeholder="Light’s back. You’re a star." maxLength={200} />
-      <PopButton label={busy ? 'Sending…' : 'Send a heart'} tone="gold" disabled={busy} onPress={send} />
+      <PopButton label={busy ? 'Sending…' : 'Send a heart'} tone="negative" disabled={busy} onPress={send} />
     </Sheet>
   );
 }
 
-const styles = StyleSheet.create({
-  moment: { flex: 1, backgroundColor: theme.color.bg.canvas, paddingHorizontal: 24, justifyContent: 'space-between' },
+const useStyles = makeStyles((t) => ({
+  moment: { flex: 1, backgroundColor: t.color.bg.canvas, paddingHorizontal: 24, justifyContent: 'space-between' },
+  blush: { position: 'absolute', left: -80, right: -80, bottom: -120, height: '62%' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 28 },
   copy: { alignItems: 'center', gap: 12 },
   text: { textAlign: 'center' },
-  note: { fontSize: 28, lineHeight: 36 },
+  note: { fontSize: 18, lineHeight: 26 },
   actions: { gap: 10 },
-});
+}));
