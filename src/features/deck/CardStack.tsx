@@ -7,7 +7,6 @@ import Animated, {
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -118,7 +117,7 @@ function TopCard({ card, progress, actions, drop, onDelete, onUpdate, answers, f
   useEffect(() => {
     // Deal in: the new top card settles onto the stack.
     progress.set(0);
-    ty.set(withSpring(0, motion.dealIn));
+    ty.set(withTiming(0, motion.dealIn));
     enter.set(withTiming(1, { duration: 180 }));
   }, [enter, progress, ty]);
 
@@ -163,7 +162,7 @@ function TopCard({ card, progress, actions, drop, onDelete, onUpdate, answers, f
       const hovering = canDrop && drop && isOver(drop.rect.value, e.absoluteX, e.absoluteY) ? 1 : 0;
       if (hovering !== over.value) {
         over.set(hovering);
-        if (drop) drop.hot.set(withSpring(hovering, motion.release));
+        if (drop) drop.hot.set(withTiming(hovering, motion.release));
         if (hovering) scheduleOnRN(haptics.trade);
       }
       const past = !hovering && ((can.right && e.translationX > THRESHOLD) || (can.left && e.translationX < -THRESHOLD)
@@ -185,9 +184,9 @@ function TopCard({ card, progress, actions, drop, onDelete, onUpdate, answers, f
       if (can.left && (e.translationX < -THRESHOLD || e.velocityX < -FLING)) return fly('left');
       if (can.up && (e.translationY < -THRESHOLD || e.velocityY < -FLING)) return fly('up');
       if (can.down && (e.translationY > THRESHOLD || e.velocityY > FLING)) return fly('down');
-      tx.set(withSpring(0, motion.cardBack));
-      ty.set(withSpring(0, motion.cardBack));
-      progress.set(withSpring(0, motion.cardBack));
+      tx.set(withTiming(0, motion.cardBack));
+      ty.set(withTiming(0, motion.cardBack));
+      progress.set(withTiming(0, motion.cardBack));
     },
   });
 

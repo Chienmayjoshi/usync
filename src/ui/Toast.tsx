@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ease } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
 import { Text } from './Text';
@@ -45,7 +46,7 @@ export function ToastHost({ children }: { children: ReactNode }) {
     <Ctx.Provider value={show}>
       {children}
       {toast && (
-        <Animated.View key={toast.id} entering={FadeInUp.springify().damping(16)} exiting={FadeOutUp.duration(160)} style={[s.wrap, { top: insets.top + 8 }]} pointerEvents="box-none">
+        <Animated.View key={toast.id} entering={FadeInUp.duration(220).easing(ease.out)} exiting={FadeOutUp.duration(160)} style={[s.wrap, { top: insets.top + 8 }]} pointerEvents="box-none">
           <View style={s.face}>
             {thanks && <Heart size={22} color={t.color.accent.heart} weight="fill" />}
             <View style={s.copy}>

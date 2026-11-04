@@ -1,6 +1,6 @@
 import type { Icon } from 'phosphor-react-native';
 import { Pressable, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
@@ -56,7 +56,7 @@ export function PopButton({ label, onPress, tone = 'primary', icon: IconCmp, fil
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPressIn={() => { p.set(withTiming(1, motion.press)); haptics.press(); }}
-      onPressOut={() => { p.set(withSpring(0, motion.release)); }}
+      onPressOut={() => { p.set(withTiming(0, motion.release)); }}
       onPress={onPress}
       style={[fill && s.fill, style]}
     >

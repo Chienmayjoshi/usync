@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Image, Modal, View } from 'react-native';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAccount, useNames } from '@/features/account/account';
@@ -8,6 +8,7 @@ import type { Card } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { errorText } from '@/lib/supabase';
 import { haptics } from '@/theme/haptics';
+import { ease } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Field } from '@/ui/Field';
 import { Glow } from '@/ui/Glow';
@@ -43,7 +44,7 @@ function HeartMoment() {
   useEffect(() => {
     if (!heart) return;
     haptics.success();
-    beat.set(withRepeat(withSequence(withTiming(1.12, { duration: 220 }), withSpring(1, { damping: 6 })), -1, false));
+    beat.set(withRepeat(withSequence(withTiming(1.08, { duration: 260, easing: ease.out }), withTiming(1, { duration: 420, easing: ease.inOut })), -1, false));
   }, [heart, beat]);
   const pulse = useAnimatedStyle(() => ({ transform: [{ scale: beat.value }] }));
   if (!heart) return null;
@@ -58,7 +59,7 @@ function HeartMoment() {
         </View>
         <Text variant="display/xl" style={styles.text}>Thank you!</Text>
         <View style={styles.center}>
-          <Animated.View entering={ZoomIn.springify().damping(10)} style={pulse}>
+          <Animated.View entering={ZoomIn.duration(320).easing(ease.out)} style={pulse}>
             <Image source={require('@/../assets/illustrations/heart.png')} style={{ width: 198, height: 200 }} resizeMode="contain" />
           </Animated.View>
           <Animated.View entering={FadeIn.delay(200)} style={styles.copy}>

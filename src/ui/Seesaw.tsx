@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Polygon } from 'react-native-svg';
 
+import { ease } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
 type Props = { tilt: number; scale?: number; /** Each person's own color: mine on the left, theirs on the right. */ colors: { me: string; partner: string } };
@@ -16,7 +17,7 @@ export function Seesaw({ tilt, scale = 1, colors }: Props) {
   const s = useStyles();
   const angle = useSharedValue(0);
   useEffect(() => {
-    angle.set(withSpring(tilt * 9, { damping: 9, stiffness: 90 }));
+    angle.set(withTiming(tilt * 9, { duration: 600, easing: ease.out }));
   }, [angle, tilt]);
   const plank = useAnimatedStyle(() => ({ transform: [{ rotate: `${angle.value}deg` }] }));
   const w = 200 * scale;

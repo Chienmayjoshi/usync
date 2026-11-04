@@ -2,13 +2,14 @@ import { CaretDown, CaretUp } from 'phosphor-react-native';
 import { type ComponentRef, type ReactNode, useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { interpolate, type SharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { interpolate, type SharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect as SvgRect, Stop } from 'react-native-svg';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
+import { motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Glow } from '@/ui/Glow';
 import { Text } from '@/ui/Text';
@@ -19,7 +20,6 @@ import type { Card } from './model';
 
 /** How much of the tray shows while collapsed, above the bottom edge. */
 export const TRAY_PEEK = 210;
-const SNAP = { damping: 20, stiffness: 180 };
 
 type Props = {
   /** 0 collapsed, 1 expanded. Owned by the screen so the header can follow it. */
@@ -53,11 +53,11 @@ export function MyDeckTray({ open, expanded, setExpanded, top, cards, rect, read
 
   const snap = (to: 0 | 1) => {
     'worklet';
-    open.set(withSpring(to, SNAP));
+    open.set(withTiming(to, motion.panel));
     scheduleOnRN(setExpanded, to === 1);
     scheduleOnRN(haptics.tick);
   };
-  const toggle = () => { open.set(withSpring(expanded ? 0 : 1, SNAP)); setExpanded(!expanded); haptics.tick(); };
+  const toggle = () => { open.set(withTiming(expanded ? 0 : 1, motion.panel)); setExpanded(!expanded); haptics.tick(); };
 
   const drag = usePanGesture({
     activeOffsetY: [-6, 6],

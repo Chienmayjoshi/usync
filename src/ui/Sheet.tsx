@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { motion } from '@/theme/motion';
@@ -16,7 +16,7 @@ export function Sheet({ onClose, children }: Props) {
   const insets = useSafeAreaInsets();
   const s = useStyles();
   const y = useSharedValue(600);
-  useEffect(() => { y.set(withSpring(0, motion.sheetIn)); }, [y]);
+  useEffect(() => { y.set(withTiming(0, motion.sheetIn)); }, [y]);
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 
   return (

@@ -6,6 +6,7 @@ import Animated, { LinearTransition } from 'react-native-reanimated';
 import { DropFab } from '@/features/drop/DropFab';
 import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
+import { ease, motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
 import { Text } from './Text';
@@ -42,7 +43,7 @@ export function TabBar({ state, navigateToTab, insets, onHeight }: BottomTabBarP
               accessibilityLabel={label}
               onPress={() => { if (!active) { haptics.tick(); navigateToTab(r.key); } }}
             >
-              <Animated.View layout={LinearTransition.springify().damping(18)} style={[s.tab, active && s.active]}>
+              <Animated.View layout={LinearTransition.duration(motion.layout).easing(ease.out)} style={[s.tab, active && s.active]}>
                 <IconCmp size={24} color={active ? t.color.text.primary : t.color.text.secondary} weight={active ? 'fill' : 'light'} />
                 {active && <Text variant="title/md" numberOfLines={1} style={s.label}>{label}</Text>}
               </Animated.View>
