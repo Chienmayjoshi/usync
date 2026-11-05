@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Image, Share, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeaderAvatars } from '@/features/account/HeaderAvatars';
+import { HeaderAvatars, shareInvite } from '@/features/account/HeaderAvatars';
 import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
@@ -13,7 +13,6 @@ import { useMoves } from '@/features/deck/useMoves';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { FilterChips } from '@/ui/FilterChips';
-import { PopButton } from '@/ui/PopButton';
 import { navBottom } from '@/ui/TabBar';
 import { Text } from '@/ui/Text';
 
@@ -40,7 +39,10 @@ export default function TableScreen() {
   const trayReady = useSharedValue(0);
   const hot = useSharedValue(0);
 
-  const table = tableCards(state);
+  // Until a partner joins there is no one to share with: your deck and the table are one stack,
+  // and the My Deck drawer stays away (Figma 212:21257).
+  const solo = !partner;
+  const table = solo ? [...deckCards(state), ...tableCards(state)] : tableCards(state);
   const deck = deckCards(state);
   const tableShown = byWhen(table, tableWhen);
   const deckShown = byWhen(deck, deckWhen);
@@ -61,24 +63,25 @@ export default function TableScreen() {
         <HeaderAvatars />
       </View>
 
-      <Animated.View style={[s.table, { top: headerTop + 100 }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
+      {solo && inviteCode && <InviteStrip code={inviteCode} top={headerTop + 76} />}
+
+      <Animated.View style={[s.table, { top: headerTop + (solo ? 234 : 100) }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
         <FilterChips
           value={tableWhen}
           onChange={setTableWhen}
           glow={t.tones[names.colors.me].glow}
           options={[{ value: 'all', label: 'All Tasks', count: tc.all }, { value: 'week', label: 'This week', count: tc.week }, { value: 'later', label: 'Later', count: tc.later }]}
         />
-        {!partner && inviteCode && <InviteStrip code={inviteCode} />}
         {!ready ? null : tableShown.length ? (
           <CardStack
             cards={tableShown}
-            actions={{
-              ...(partner ? {
-                right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
-                left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
-              } : {}),
+            actions={solo ? {
+              right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
+            } : {
+              right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
+              left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
             }}
-            drop={{ rect, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
+            drop={solo ? undefined : { rect, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
             onDelete={(c) => move(c, 'delete')}
             onUpdate={setUpdating}
           />
@@ -86,12 +89,12 @@ export default function TableScreen() {
           <Empty
             image={require('@/../assets/illustrations/table-clear.png')}
             title="The Table Is Clear."
-            body={table.length ? 'Nothing here for this filter.' : 'Everything has an owner right now.\nAdd something new, or open your deck.'}
+            body={table.length ? 'Nothing here for this filter.' : solo ? 'Nothing to do right now.\nAdd something new with +.' : 'Everything has an owner right now.\nAdd something new, or open your deck.'}
           />
         )}
       </Animated.View>
 
-      <DeckDrawer
+      {!solo && <DeckDrawer
         open={open}
         expanded={expanded}
         setExpanded={setExpanded}
@@ -130,7 +133,7 @@ export default function TableScreen() {
             body={deck.length ? 'Nothing here for this filter.' : `Nothing on your deck.\n${table.length} ${table.length === 1 ? 'card is' : 'cards are'} still on the table.`}
           />
         )}
-      </DeckDrawer>
+      </DeckDrawer>}
 
       {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </View>
@@ -149,16 +152,20 @@ function Empty({ image, title, body }: { image: number; title: string; body: str
   );
 }
 
-function InviteStrip({ code }: { code: string }) {
+/** Figma "Invite strip" (214:21517): the code to send, until your person joins. */
+function InviteStrip({ code, top }: { code: string; top: number }) {
   const t = useTheme();
   const s = useStyles();
-  const share = () => Share.share({ message: `Join me on usync so we can share the life admin. Open the app and enter this code: ${code}` }).catch(() => undefined);
   return (
-    <View style={s.invite}>
-      <Text variant="label/md" color={t.color.text.secondary}>Invite your person</Text>
-      <Text variant="display/lg" style={s.code}>{code}</Text>
-      <Text variant="body/sm" color={t.color.text.secondary}>Until they join, everything you add lands on your deck.</Text>
-      <PopButton label="Share code" tone="primary" small onPress={share} />
+    <View style={[s.invite, { top }]}>
+      <View style={s.inviteText}>
+        <Text style={s.inviteLabel} color={t.color.text.secondary}>INVITE YOUR PERSON</Text>
+        <Text style={s.code} color={t.color.text.primary} accessibilityLabel={`Code ${code}`}>{code.split('').join(' ')}</Text>
+        <Text style={s.inviteBody} color={t.color.text.primary}>Until they join, everything you add is you to pick</Text>
+      </View>
+      <Pressable onPress={() => shareInvite(code)} accessibilityRole="button" accessibilityLabel="Share code" hitSlop={8} style={s.share}>
+        <Text style={s.shareText} color={t.color.action.onPrimary}>SHARE CODE</Text>
+      </Pressable>
     </View>
   );
 }
@@ -172,6 +179,15 @@ const useStyles = makeStyles((t) => ({
   art: { width: 200, height: 220 },
   emptyTitle: { textTransform: 'none', fontSize: 26 },
   center: { textAlign: 'center' },
-  invite: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: t.color.border.dashed, borderRadius: t.radius.lg, padding: 16, gap: 6, alignItems: 'flex-start' },
-  code: { letterSpacing: 6 },
+  invite: {
+    position: 'absolute', left: 20, right: 20, backgroundColor: t.color.bg.surface, borderRadius: 14,
+    borderWidth: 1, borderStyle: 'dashed', borderColor: t.scheme === 'light' ? '#A3A3A3' : t.color.border.dashed,
+    padding: 12, gap: 8, alignItems: 'flex-start',
+  },
+  inviteText: { gap: 4, alignSelf: 'stretch' },
+  inviteLabel: { fontFamily: 'Satoshi-Medium', fontSize: 12, lineHeight: 16 },
+  code: { fontFamily: 'Satoshi-Bold', fontSize: 28, lineHeight: 38 },
+  inviteBody: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 19 },
+  share: { backgroundColor: t.color.action.primary, borderRadius: 40, paddingHorizontal: 16, paddingVertical: 5.5 },
+  shareText: { fontFamily: 'Satoshi-Bold', fontSize: 12, lineHeight: 16 },
 }));
