@@ -25,10 +25,8 @@ export default function PartnerScreen() {
   const names = useNames();
   const move = useMoves();
   const [updating, setUpdating] = useState<Card | null>(null);
-  const [order, setOrder] = useState<string[]>([]);
-  const theirs = partnerDeck(state);
-  // Looking through their deck is private: rotate locally, never reorder their pile.
-  const ranked = [...theirs].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  // Looking through their deck is private: the stack scrolls locally, their pile never reorders.
+  const ranked = partnerDeck(state);
   const together = togetherCards(state);
   const waiting = waitingCards(state);
   const them = names.partner;
@@ -43,8 +41,6 @@ export default function PartnerScreen() {
           <CardStack
             cards={ranked}
             actions={{}}
-            onNext={(c) => setOrder(ranked.map((x) => x.id).filter((id) => id !== c.id).concat(c.id))}
-            onPrev={(c) => setOrder([c.id, ...ranked.map((x) => x.id).filter((id) => id !== c.id)])}
             onUpdate={setUpdating}
             footer={(c) => (c.status === 'active' && !c.request ? (
               <View style={s.footer}>

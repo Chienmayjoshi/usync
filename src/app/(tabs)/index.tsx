@@ -72,8 +72,6 @@ export default function TableScreen() {
         {!ready ? null : tableShown.length ? (
           <CardStack
             cards={tableShown}
-            onNext={(c) => move(c, 'next')}
-            onPrev={(c) => move(c, 'prev')}
             actions={{
               ...(partner ? {
                 right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
@@ -116,8 +114,6 @@ export default function TableScreen() {
         {deckShown.length ? (
           <CardStack
             cards={deckShown}
-            onNext={(c) => move(c, 'next')}
-            onPrev={(c) => move(c, 'prev')}
             actions={{
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
               left: { label: 'Back to table', color: t.color.action.negative, run: (c) => move(c, 'table') },
