@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Modal, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +13,7 @@ import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Field } from '@/ui/Field';
 import { Glow } from '@/ui/Glow';
 import { PopButton } from '@/ui/PopButton';
-import { Sheet } from '@/ui/Sheet';
+import { Sheet, type SheetHandle } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
@@ -95,20 +95,21 @@ function SendHeart({ card, onClose }: { card: Card; onClose: () => void }) {
   const toast = useToast();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const sheet = useRef<SheetHandle>(null);
   const send = async () => {
     setBusy(true);
     try {
       await sendThanks(card.id, note);
       haptics.success();
       toast({ kind: 'thanks', title: 'Heart sent', body: `${names.partnerOr} will see it the next time they open usync.`, ms: 3500 });
-      onClose();
+      sheet.current?.close();
     } catch (e) {
       toast({ kind: 'info', title: 'That didn’t send', body: errorText(e) });
       setBusy(false);
     }
   };
   return (
-    <Sheet onClose={onClose}>
+    <Sheet ref={sheet} onClose={onClose}>
       <Text variant="label/md" color={t.color.accent.heart}>{`Thank ${names.partnerOr}`}</Text>
       <Text variant="display/md">{card.title}</Text>
       <Field label="Add a line (optional)" value={note} onChangeText={setNote} placeholder="Light’s back. You’re a star." maxLength={200} />

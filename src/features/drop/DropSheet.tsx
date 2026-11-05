@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Microphone, Stop } from 'phosphor-react-native';
+import { Stop } from 'phosphor-react-native';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { Pressable, Switch, TextInput, View } from 'react-native';
+import { Platform, Pressable, type TextStyle, TextInput, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { useAccount, useNames } from '@/features/account/account';
@@ -13,8 +14,9 @@ import { fonts } from '@/theme/type';
 import { Chip } from '@/ui/Chip';
 import { PopButton } from '@/ui/PopButton';
 import { Segmented } from '@/ui/Segmented';
-import { Sheet } from '@/ui/Sheet';
+import { Sheet, useSheetClose } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
+import { Toggle } from '@/ui/Toggle';
 import { useToast } from '@/ui/Toast';
 
 import { useVoice } from './voice';
@@ -28,6 +30,8 @@ export const useOpenDrop = () => useContext(Ctx);
 type Phase = 'typing' | 'sorting' | 'sorted';
 
 const PLACE_KEY = 'usync.drop.place';
+/** Voice drop waits on the native build; until then the mic is a second Add button. */
+const VOICE_READY = false;
 
 export function DropProvider({ children }: { children: ReactNode }) {
   // A fresh key per open remounts the sheet, so every drop starts from a clean slate.
@@ -41,6 +45,11 @@ export function DropProvider({ children }: { children: ReactNode }) {
 }
 
 function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
+  return <Sheet onClose={onClose}><DropBody mode={mode} /></Sheet>;
+}
+
+function DropBody({ mode }: { mode: DropMode }) {
+  const onClose = useSheetClose();
   const t = useTheme();
   const styles = useStyles();
   const { dispatch } = useDeck();
@@ -55,12 +64,13 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
     AsyncStorage.getItem(PLACE_KEY).then((v) => { if (v === 'table' || v === 'mine') setPlace(v); }).catch(() => undefined);
   }, []);
   const pickPlace = (v: DropPlace) => { setPlace(v); if (v === 'table') setSurprise(false); AsyncStorage.setItem(PLACE_KEY, v).catch(() => undefined); };
-  const toggleSurprise = (on: boolean) => { haptics.tick(); setSurprise(on); if (on) pickPlace('mine'); };
+  const toggleSurprise = (on: boolean) => { setSurprise(on); if (on) pickPlace('mine'); };
   const [phase, setPhase] = useState<Phase>('typing');
   const [preview, setPreview] = useState<Card[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const voice = useVoice(text, setText);
-  const [voiceNote, setVoiceNote] = useState<string | null>(null);
+  const raw = useVoice(text, setText);
+  const voice = VOICE_READY ? raw : { ...raw, available: false, listening: false, error: null };
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     const pending = timers.current;
@@ -69,17 +79,13 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
 
   const toggleVoice = () => {
     haptics.press();
-    if (!voice.available) {
-      setVoiceNote('Voice drop needs the new usync build. For now, tap the mic on your keyboard: it works the same, Hinglish too.');
-      return;
-    }
     if (voice.listening) voice.stop(); else voice.start().catch(() => undefined);
   };
 
   // Opened by holding the Drop button: start listening straight away.
   const started = useRef(false);
   useEffect(() => {
-    if (mode !== 'voice' || started.current) return;
+    if (mode !== 'voice' || !voice.available || started.current) return;
     started.current = true;
     const t = setTimeout(toggleVoice, 250);
     return () => clearTimeout(t);
@@ -105,23 +111,29 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
     }, 2100));
   };
 
+  // Until voice ships, the mic is a second Add button: same state, same action.
+  const empty = !text.trim();
+  const mic = voice.available ? { onPress: toggleVoice, disabled: false } : { onPress: submit, disabled: empty };
+
   return (
-    <Sheet onClose={onClose}>
+    <>
       {phase === 'typing' && mode === 'voice' && voice.listening ? (
         <VoiceBar text={text} onStop={toggleVoice} />
       ) : phase === 'typing' ? (
         <>
           <Text variant="label/md" color={voice.listening ? t.color.accent.tag : t.color.text.secondary}>{voice.listening ? 'Listening…' : 'Add a task'}</Text>
-          <View style={[styles.input, voice.listening && styles.inputLive]}>
+          <View style={[styles.input, focused && styles.inputFocus, voice.listening && styles.inputLive]}>
             <TextInput
               value={text}
               onChangeText={setText}
-              placeholder={mode === 'voice' ? 'Say it like you’d tell them…' : 'bedroom light flickering, call electrician, return the parcel'}
+              placeholder={voice.listening ? 'Say it like you’d tell them…' : 'Enter a task here'}
               placeholderTextColor={t.color.text.placeholder}
               keyboardAppearance={t.scheme}
               multiline
-              autoFocus={mode === 'type'}
-              style={styles.inputText}
+              autoFocus={mode === 'type' || !voice.available}
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+              style={[styles.inputText, noRing]}
               accessibilityLabel="What needs doing?"
             />
           </View>
@@ -131,27 +143,18 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
               <Segmented value={place} onChange={pickPlace} options={[{ value: 'table', label: 'On the table' }, { value: 'mine', label: 'My deck' }]} />
               <View style={styles.switchRow}>
                 <View style={styles.flex}>
-                  <Text variant="title/md">{`A surprise for ${names.partnerOr}`}</Text>
+                  <Text variant="title/md" style={styles.switchTitle}>{`A surprise for ${names.partnerOr}`}</Text>
                   <Text variant="caption" color={t.color.text.secondary}>Only you can see it until it’s done.</Text>
                 </View>
-                <Switch
-                  value={surprise}
-                  onValueChange={toggleSurprise}
-                  trackColor={{ false: t.color.action.neutral, true: t.color.action.primary }}
-                  thumbColor={t.scheme === 'light' ? '#FFFFFF' : t.color.bg.canvas}
-                  ios_backgroundColor={t.color.action.neutral}
-                  accessibilityLabel={`A surprise for ${names.partnerOr}`}
-                />
+                <Toggle value={surprise} onChange={toggleSurprise} accessibilityLabel={`A surprise for ${names.partnerOr}`} />
               </View>
             </View>
           )}
           <View style={styles.row}>
-            <PopButton label={surprise ? 'Add surprise' : 'Add task'} tone="primary" fill onPress={submit} disabled={!text.trim()} />
-            <MicButton listening={voice.listening} onPress={toggleVoice} />
+            <PopButton label={surprise ? 'Add surprise' : 'Add task'} tone="primary" fill large onPress={submit} disabled={empty} />
+            <MicButton listening={voice.listening} onPress={mic.onPress} disabled={mic.disabled} />
           </View>
-          <Text variant="caption" color={t.color.text.muted}>
-            {voice.error ?? voiceNote ?? 'One line; we’ll sort it. Several things in one line become several cards. Hold + to say it instead.'}
-          </Text>
+          {voice.error && <Text variant="caption" color={t.color.action.negative}>{voice.error}</Text>}
         </>
       ) : (
         <>
@@ -160,11 +163,11 @@ function DropSheet({ mode, onClose }: { mode: DropMode; onClose: () => void }) {
           {preview.map((c) => <SortRow key={c.id} card={c} sorting={phase === 'sorting'} />)}
         </>
       )}
-    </Sheet>
+    </>
   );
 }
 
-function MicButton({ listening, onPress }: { listening: boolean; onPress: () => void }) {
+function MicButton({ listening, onPress, disabled }: { listening: boolean; onPress: () => void; disabled: boolean }) {
   const t = useTheme();
   const styles = useStyles();
   const ring = useSharedValue(0);
@@ -173,14 +176,23 @@ function MicButton({ listening, onPress }: { listening: boolean; onPress: () => 
   }, [listening, ring]);
   const pulse = useAnimatedStyle(() => ({ opacity: 0.6 * (1 - ring.value), transform: [{ scale: 1 + ring.value * 0.5 }] }));
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Drop by voice'} style={styles.micWrap} hitSlop={6}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={listening ? 'Stop listening' : 'Drop by voice'} accessibilityState={{ disabled }} disabled={disabled} style={[styles.micWrap, disabled && styles.dim]} hitSlop={6}>
       <Animated.View style={[styles.micRing, pulse]} pointerEvents="none" />
       <View style={[styles.mic, listening && styles.micOn]}>
         {listening
           ? <Stop size={20} color={t.color.text.onColor} weight="fill" />
-          : <Microphone size={22} color={t.color.action.onPrimary} weight="bold" />}
+          : <MicIcon color={t.color.action.onPrimary} />}
       </View>
     </Pressable>
+  );
+}
+
+/** Figma "Mic" glyph (158:17538), exported as is. */
+function MicIcon({ color }: { color: string }) {
+  return (
+    <Svg width={15} height={22} viewBox="0 0 15 22" fill="none">
+      <Path fill={color} d="M7.5 15C8.69309 14.9988 9.83697 14.5243 10.6806 13.6806C11.5243 12.837 11.9988 11.6931 12 10.5V4.5C12 3.30653 11.5259 2.16193 10.682 1.31802C9.83807 0.474106 8.69347 0 7.5 0C6.30653 0 5.16193 0.474106 4.31802 1.31802C3.47411 2.16193 3 3.30653 3 4.5V10.5C3.00124 11.6931 3.47575 12.837 4.31939 13.6806C5.16303 14.5243 6.30691 14.9988 7.5 15ZM4.5 4.5C4.5 3.70435 4.81607 2.94129 5.37868 2.37868C5.94129 1.81607 6.70435 1.5 7.5 1.5C8.29565 1.5 9.05871 1.81607 9.62132 2.37868C10.1839 2.94129 10.5 3.70435 10.5 4.5V10.5C10.5 11.2956 10.1839 12.0587 9.62132 12.6213C9.05871 13.1839 8.29565 13.5 7.5 13.5C6.70435 13.5 5.94129 13.1839 5.37868 12.6213C4.81607 12.0587 4.5 11.2956 4.5 10.5V4.5ZM8.25 17.9625V21C8.25 21.1989 8.17098 21.3897 8.03033 21.5303C7.88968 21.671 7.69891 21.75 7.5 21.75C7.30109 21.75 7.11032 21.671 6.96967 21.5303C6.82902 21.3897 6.75 21.1989 6.75 21V17.9625C4.90091 17.7743 3.18728 16.9072 1.94048 15.5288C0.693677 14.1504 0.00228386 12.3586 0 10.5C0 10.3011 0.0790178 10.1103 0.21967 9.96967C0.360322 9.82902 0.551088 9.75 0.75 9.75C0.948912 9.75 1.13968 9.82902 1.28033 9.96967C1.42098 10.1103 1.5 10.3011 1.5 10.5C1.5 12.0913 2.13214 13.6174 3.25736 14.7426C4.38258 15.8679 5.9087 16.5 7.5 16.5C9.0913 16.5 10.6174 15.8679 11.7426 14.7426C12.8679 13.6174 13.5 12.0913 13.5 10.5C13.5 10.3011 13.579 10.1103 13.7197 9.96967C13.8603 9.82902 14.0511 9.75 14.25 9.75C14.4489 9.75 14.6397 9.82902 14.7803 9.96967C14.921 10.1103 15 10.3011 15 10.5C14.9977 12.3586 14.3063 14.1504 13.0595 15.5288C11.8127 16.9072 10.0991 17.7743 8.25 17.9625Z" />
+    </Svg>
   );
 }
 
@@ -203,14 +215,20 @@ function SortRow({ card, sorting }: { card: Card; sorting: boolean }) {
   );
 }
 
-const MIC = 48;
+const MIC = 56;
+// Chrome draws its own focus ring on the textarea; the sheet's stroke is the focus state instead.
+const noRing = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : null;
 
 const useStyles = makeStyles((t) => ({
-  input: { backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, borderWidth: 1.5, borderColor: 'transparent', paddingHorizontal: 16, paddingVertical: 12, minHeight: 88 },
+  // Figma "Input" (149:8583): 100 tall, r10, 14 padding, a 1.5 ink stroke while you type.
+  input: { backgroundColor: t.color.bg.surface, borderRadius: 10, borderWidth: 1.5, borderColor: 'transparent', minHeight: 100 },
+  inputFocus: { borderColor: t.color.text.primary },
   inputLive: { borderColor: t.color.accent.tag },
-  inputText: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  who: { gap: 10 },
+  inputText: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22, flexGrow: 1, minHeight: 97, padding: 14, borderRadius: 8.5, textAlignVertical: 'top' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  who: { gap: 12 },
+  dim: { opacity: 0.3 },
+  switchTitle: { fontSize: 15, lineHeight: 20 },
   flex: { flex: 1 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, paddingHorizontal: 14, paddingVertical: 12 },
   micWrap: { width: MIC, height: MIC, alignItems: 'center', justifyContent: 'center' },

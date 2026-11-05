@@ -27,10 +27,11 @@ type Props = {
   fill?: boolean;
   disabled?: boolean;
   small?: boolean;
+  large?: boolean;
   style?: ViewStyle;
 };
 
-export function PopButton({ label, onPress, tone = 'primary', icon: IconCmp, fill, disabled, small, style }: Props) {
+export function PopButton({ label, onPress, tone = 'primary', icon: IconCmp, fill, disabled, small, large, style }: Props) {
   const t = useTheme();
   const s = useStyles();
   const p = useSharedValue(0);
@@ -38,7 +39,6 @@ export function PopButton({ label, onPress, tone = 'primary', icon: IconCmp, fil
 
   const role = tone === 'cream' ? 'primary' : tone;
   const colors: { bg: string; ink: string; border?: string } = (() => {
-    if (disabled) return { bg: t.color.bg.surface, ink: t.color.text.placeholder };
     switch (role) {
       case 'primary': return { bg: t.color.action.primary, ink: t.color.action.onPrimary };
       case 'positive': return { bg: t.color.action.positive, ink: t.color.text.onColor };
@@ -60,7 +60,7 @@ export function PopButton({ label, onPress, tone = 'primary', icon: IconCmp, fil
       onPress={onPress}
       style={[fill && s.fill, style]}
     >
-      <Animated.View style={[s.face, small && s.small, { backgroundColor: colors.bg }, colors.border ? { borderWidth: 1, borderColor: colors.border } : null, face]}>
+      <Animated.View style={[s.face, small && s.small, large && s.large, { backgroundColor: colors.bg }, colors.border ? { borderWidth: 1, borderColor: colors.border } : null, disabled && s.disabled, face]}>
         {IconCmp && <IconCmp size={small ? 14 : 18} color={colors.ink} weight="bold" />}
         <Text variant={small ? 'button/sm' : 'button'} color={colors.ink} numberOfLines={1}>{label}</Text>
       </Animated.View>
@@ -75,4 +75,8 @@ const useStyles = makeStyles((t) => ({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
   },
   small: { minHeight: 32, paddingHorizontal: 14 },
+  // Figma's sheet buttons are 56 tall.
+  large: { minHeight: 56 },
+  // Disabled is the same button, dimmed, so it reads as "not yet" rather than a different control.
+  disabled: { opacity: 0.3 },
 }));

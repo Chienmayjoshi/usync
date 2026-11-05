@@ -1,5 +1,5 @@
 import { Heart } from 'phosphor-react-native';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -18,7 +18,7 @@ import { PopButton } from '@/ui/PopButton';
 import { Screen } from '@/ui/Screen';
 import { Seesaw } from '@/ui/Seesaw';
 import { Segmented } from '@/ui/Segmented';
-import { Sheet } from '@/ui/Sheet';
+import { Sheet, type SheetHandle } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
@@ -124,12 +124,13 @@ function NoteSheet({ onClose }: { onClose: () => void }) {
   const names = useNames();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const sheet = useRef<SheetHandle>(null);
   const save = async () => {
     setBusy(true);
-    try { await sync.appreciate(text); haptics.success(); onClose(); } catch (e) { toast({ kind: 'info', title: 'That didn’t save', body: errorText(e) }); setBusy(false); }
+    try { await sync.appreciate(text); haptics.success(); sheet.current?.close(); } catch (e) { toast({ kind: 'info', title: 'That didn’t save', body: errorText(e) }); setBusy(false); }
   };
   return (
-    <Sheet onClose={onClose}>
+    <Sheet ref={sheet} onClose={onClose}>
       <Field label={`One thing ${names.partnerOr} did this week`} value={text} onChangeText={setText} placeholder="Thanks for chasing the electrician" multiline maxLength={200} autoFocus />
       <PopButton label={busy ? 'Sealing…' : 'Seal it'} tone="primary" disabled={!text.trim() || busy} onPress={save} />
     </Sheet>

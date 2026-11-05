@@ -32,8 +32,9 @@ export function Segmented<T extends string>({ value, options, onChange, accent }
 }
 
 const useStyles = makeStyles((t) => ({
-  row: { flexDirection: 'row', backgroundColor: t.color.bg.sunken, borderRadius: t.radius.md, padding: 3, gap: 3 },
-  seg: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: t.radius.sm },
-  on: { backgroundColor: t.color.bg.raised, boxShadow: t.shadow.row },
+  // Figma "Segmented" (149:8641): 48 tall track, 4 padding and gap, a 40 tall plate with a 1px stroke.
+  row: { flexDirection: 'row', backgroundColor: t.color.bg.sunken, borderRadius: t.radius.md, padding: 4, gap: 4 },
+  seg: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: t.radius.sm, borderWidth: 1, borderColor: 'transparent' },
+  on: { backgroundColor: t.color.bg.raised, borderColor: t.color.border.strong },
   label: { fontSize: 14 },
 }));

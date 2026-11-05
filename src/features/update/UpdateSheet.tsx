@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 
 import type { Card } from '@/features/deck/model';
@@ -9,7 +9,7 @@ import { haptics } from '@/theme/haptics';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { fonts } from '@/theme/type';
 import { PopButton } from '@/ui/PopButton';
-import { Sheet } from '@/ui/Sheet';
+import { Sheet, type SheetHandle } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
@@ -28,6 +28,7 @@ export function UpdateSheet({ card, onClose }: { card: Card; onClose: () => void
 
   useEffect(() => { haptics.take(); }, []);
 
+  const sheet = useRef<SheetHandle>(null);
   const save = async () => {
     setBusy(true);
     setError(null);
@@ -35,7 +36,7 @@ export function UpdateSheet({ card, onClose }: { card: Card; onClose: () => void
       await addUpdate(card.id, note, waiting);
       haptics.success();
       toast({ kind: 'info', title: waiting ? 'Parked in waiting' : 'Added to the story', body: waiting ? 'Off your deck until they come through. It never counts as a slip.' : card.title, ms: 3500 });
-      onClose();
+      sheet.current?.close();
     } catch (e) {
       setError(errorText(e));
       setBusy(false);
@@ -43,7 +44,7 @@ export function UpdateSheet({ card, onClose }: { card: Card; onClose: () => void
   };
 
   return (
-    <Sheet onClose={onClose}>
+    <Sheet ref={sheet} onClose={onClose}>
       <Text variant="label/md" color={t.color.text.secondary}>Add an update</Text>
       <Text variant="display/md">{card.title}</Text>
       <View style={styles.input}>
