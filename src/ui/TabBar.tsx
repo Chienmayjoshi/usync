@@ -1,14 +1,14 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
-import { Cards, Handshake, Heart, type Icon } from 'phosphor-react-native';
+import { useEffect } from 'react';
 import { Pressable, View } from 'react-native';
-import Animated, { LinearTransition } from 'react-native-reanimated';
+import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { DropFab } from '@/features/drop/DropFab';
-import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
-import { ease, motion } from '@/theme/motion';
+import { ease } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
+import { PartnerIcon, SyncIcon, TableIcon } from './NavIcons';
 import { Text } from './Text';
 
 /**
@@ -17,62 +17,113 @@ import { Text } from './Text';
  */
 export const navBottom = (inset: number) => inset + 14;
 
-const ICONS: Record<string, { icon: Icon; label: (partner: string | null) => string }> = {
-  index: { icon: Cards, label: () => 'Table' },
-  us: { icon: Heart, label: (p) => p ?? 'Partner' },
-  sync: { icon: Handshake, label: () => 'Sync' },
+// Figma "Navbar" (119:3568-3585): the pill is 6 + 123 + 4 + 64 + 4 + 64 + 6 wide whatever is
+// active, so switching tabs never changes its width. The active highlight slides across.
+const PAD = 6;
+const GAP = 4;
+const ACTIVE = 123;
+const IDLE = 64;
+const STEP = IDLE + GAP;
+const SWITCH = { duration: 280, easing: ease.out };
+
+const TABS: Record<string, { icon: typeof TableIcon; label: string; iconW: number }> = {
+  index: { icon: TableIcon, label: 'Table', iconW: 21.5 },
+  us: { icon: PartnerIcon, label: 'Partner', iconW: 26 },
+  sync: { icon: SyncIcon, label: 'Sync', iconW: 27 },
 };
 
-/** Floating pill: the active tab opens into an icon and a label. Drop (+) sits beside it. */
-export function TabBar({ state, navigateToTab, insets, onHeight }: BottomTabBarProps & { onHeight?: (h: number) => void }) {
+export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
   const t = useTheme();
   const s = useStyles();
-  const names = useNames();
+  const routes = state.routes.filter((r) => TABS[r.name]);
+  const active = routes.findIndex((r) => r.key === state.routes[state.index]?.key);
+  const pos = useSharedValue(Math.max(0, active));
+  useEffect(() => { if (active >= 0) pos.set(withTiming(active, SWITCH)); }, [active, pos]);
+
+  const highlight = useAnimatedStyle(() => ({ transform: [{ translateX: pos.value * STEP }] }));
+
   return (
-    <View
-      style={[s.wrap, { paddingBottom: navBottom(insets.bottom) }]}
-      pointerEvents="box-none"
-      onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}
-    >
+    <View style={[s.wrap, { paddingBottom: navBottom(insets.bottom) }]} pointerEvents="box-none">
       <View style={s.pill}>
-        {state.routes.map((r, i) => {
-          const meta = ICONS[r.name];
-          if (!meta) return null;
-          const active = state.index === i;
-          const IconCmp = meta.icon;
-          const label = meta.label(names.partner);
-          return (
-            <Pressable
-              key={r.key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={label}
-              onPress={() => { if (!active) { haptics.tick(); navigateToTab(r.key); } }}
-            >
-              <Animated.View layout={LinearTransition.duration(motion.layout).easing(ease.out)} style={[s.tab, active && s.active]}>
-                <IconCmp size={24} color={active ? t.color.text.primary : t.color.text.secondary} weight={active ? 'fill' : 'light'} />
-                {active && <Text variant="title/md" numberOfLines={1} style={s.label}>{label}</Text>}
-              </Animated.View>
-            </Pressable>
-          );
-        })}
+        <Animated.View style={[s.highlight, highlight]} pointerEvents="none" />
+        {routes.map((r, i) => (
+          <Tab
+            key={r.key}
+            index={i}
+            pos={pos}
+            meta={TABS[r.name]}
+            active={i === active}
+            ink={t.color.text.primary}
+            idleInk={t.scheme === 'light' ? '#3A3A3A' : t.color.text.secondary}
+            onPress={() => { if (i !== active) { haptics.tick(); navigateToTab(r.key); } }}
+          />
+        ))}
       </View>
       <DropFab />
     </View>
   );
 }
 
-const useStyles = makeStyles((t) => ({
-  wrap: {
-    position: 'absolute', left: 0, right: 0, bottom: 0,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 8,
-  },
-  pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4, padding: 6, borderRadius: t.radius.full,
-    backgroundColor: t.scheme === 'light' ? 'rgba(242,242,242,0.96)' : 'rgba(30,27,36,0.96)',
-    borderWidth: 1, borderColor: t.color.border.card, boxShadow: t.shadow.card,
-  },
-  tab: { height: 56, minWidth: 56, paddingHorizontal: 16, borderRadius: t.radius.full, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  active: { backgroundColor: t.scheme === 'light' ? 'rgba(255,255,255,0.92)' : t.color.bg.stack2, boxShadow: t.shadow.row },
-  label: { maxWidth: 110 },
-}));
+type TabProps = { index: number; pos: SharedValue<number>; meta: (typeof TABS)[string]; active: boolean; ink: string; idleInk: string; onPress: () => void };
+
+/** A tab grows from 64 to 123 as the highlight arrives; its label fades in where it will sit. */
+function Tab({ index, pos, meta, active, ink, idleInk, onPress }: TabProps) {
+  const s = useStyles();
+  const Icon = meta.icon;
+  const box = useAnimatedStyle(() => {
+    const w = Math.max(0, 1 - Math.abs(pos.value - index));
+    return { width: IDLE + (ACTIVE - IDLE) * w };
+  });
+  const icon = useAnimatedStyle(() => {
+    const w = Math.max(0, 1 - Math.abs(pos.value - index));
+    // Centered in 64 when idle; 14 from the left edge when active (Figma padding 14 / 18).
+    return { transform: [{ translateX: (IDLE - meta.iconW) / 2 + (14 - (IDLE - meta.iconW) / 2) * w }] };
+  });
+  const label = useAnimatedStyle(() => {
+    const w = Math.max(0, 1 - Math.abs(pos.value - index));
+    return { opacity: w * w };
+  });
+  return (
+    <Pressable onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={meta.label}>
+      <Animated.View style={[s.tab, box]}>
+        <Animated.View style={[s.icon, icon]}>
+          <Icon color={active ? ink : idleInk} />
+        </Animated.View>
+        <Animated.View style={[s.label, { left: 14 + meta.iconW + 8 }, label]}>
+          <Text variant="title/md" color={ink} style={s.labelText} numberOfLines={1}>{meta.label}</Text>
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const useStyles = makeStyles((t) => {
+  const light = t.scheme === 'light';
+  return {
+    wrap: {
+      position: 'absolute', left: 0, right: 0, bottom: 0,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    },
+    pill: {
+      // Figma's 1.5 stroke sits inside the 68 height without moving content; RN borders take space,
+      // so the vertical padding gives that 1.5 back to keep the tabs 56 tall.
+      flexDirection: 'row', alignItems: 'center', gap: GAP, height: 68, paddingHorizontal: PAD, paddingVertical: PAD - 1.5,
+      borderRadius: 999, borderWidth: 1.5,
+      backgroundColor: light ? 'rgba(255,255,255,0.68)' : 'rgba(30,27,36,0.82)',
+      borderColor: light ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.10)',
+      boxShadow: light
+        ? 'inset 0px -1px 0px rgba(255,255,255,0.38), 0px 4px 16px rgba(0,0,0,0.07), 0px 12px 40px rgba(0,0,0,0.09)'
+        : '0px 4px 16px rgba(0,0,0,0.3), 0px 12px 40px rgba(0,0,0,0.35)',
+    },
+    highlight: {
+      position: 'absolute', left: PAD, top: PAD - 1.5, width: ACTIVE, height: 56, borderRadius: 999, borderWidth: 1,
+      backgroundColor: light ? 'rgba(255,255,255,0.85)' : t.color.bg.stack2,
+      borderColor: light ? 'rgba(255,255,255,0.56)' : 'rgba(255,255,255,0.08)',
+      boxShadow: light ? '0px -1px 2px rgba(255,255,255,0.5), 0px 4px 12px rgba(0,0,0,0.09)' : '0px 4px 12px rgba(0,0,0,0.3)',
+    },
+    tab: { height: 56, justifyContent: 'center', overflow: 'hidden' },
+    icon: { position: 'absolute', left: 0, top: 16 },
+    label: { position: 'absolute', top: 18 },
+    labelText: { fontFamily: 'Satoshi-Bold', fontSize: 15, lineHeight: 20, letterSpacing: -0.2 },
+  };
+});

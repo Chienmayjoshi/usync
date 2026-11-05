@@ -29,7 +29,7 @@ export function DropFab() {
       delayLongPress={350}
     >
       <Animated.View style={[s.fab, face]}>
-        <Plus size={26} color={t.color.action.onPrimary} weight="regular" />
+        <Plus size={28} color={t.color.action.onPrimary} weight="light" />
       </Animated.View>
     </Pressable>
   );
@@ -38,6 +38,6 @@ export function DropFab() {
 const useStyles = makeStyles((t) => ({
   fab: {
     width: FAB, height: FAB, borderRadius: FAB / 2, backgroundColor: t.scheme === 'light' ? '#0B0A0F' : t.color.action.primary,
-    alignItems: 'center', justifyContent: 'center', boxShadow: t.shadow.card,
+    alignItems: 'center', justifyContent: 'center', boxShadow: t.scheme === 'light' ? '0px 6px 16px rgba(65,65,65,0.25)' : t.shadow.card,
   },
 }));
