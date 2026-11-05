@@ -22,6 +22,7 @@ export function HeaderAvatars({ wrapPartner }: { wrapPartner?: (node: ReactNode)
         wrapPartner={wrapPartner}
         onPress={() => router.push('/settings')}
       />
+      <View style={styles.icons}>
       <Pressable onPress={() => router.push('/activity')} hitSlop={4} accessibilityRole="button" accessibilityLabel={unread ? 'Activity, new' : 'Activity'} style={styles.icon}>
         <Bell size={24} color={t.color.text.primary} />
         {unread && <View style={[styles.dot, { backgroundColor: t.color.accent.heart, borderColor: t.color.bg.canvas }]} />}
@@ -29,12 +30,14 @@ export function HeaderAvatars({ wrapPartner }: { wrapPartner?: (node: ReactNode)
       <Pressable onPress={() => router.push('/settings')} hitSlop={4} accessibilityRole="button" accessibilityLabel="Settings" style={styles.icon}>
         <GearSix size={24} color={t.color.text.primary} />
       </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  dot: { position: 'absolute', top: 10, right: 11, width: 10, height: 10, borderRadius: 5, borderWidth: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  icons: { flexDirection: 'row' },
+  icon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  dot: { position: 'absolute', top: 12, right: 13, width: 10, height: 10, borderRadius: 5, borderWidth: 2 },
 });

@@ -1,5 +1,4 @@
 import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
-import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, DMSans_800ExtraBold } from '@expo-google-fonts/dm-sans';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -20,7 +19,13 @@ import { ToastHost } from '@/ui/Toast';
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
-  const [loaded] = useFonts({ ArchivoBlack_400Regular, DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold, DMSans_800ExtraBold });
+  const [loaded] = useFonts({
+    ArchivoBlack_400Regular,
+    'Satoshi-Regular': require('@/../assets/fonts/Satoshi-Regular.otf'),
+    'Satoshi-Medium': require('@/../assets/fonts/Satoshi-Medium.otf'),
+    'Satoshi-Bold': require('@/../assets/fonts/Satoshi-Bold.otf'),
+    'Satoshi-Black': require('@/../assets/fonts/Satoshi-Black.otf'),
+  });
 
   useEffect(() => {
     if (loaded) SplashScreen.hideAsync().catch(() => undefined);

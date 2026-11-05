@@ -90,6 +90,21 @@ const light = {
   action: { primary: '#1A1A1A', onPrimary: '#FFFFFF', positive: '#3BCF6C', negative: '#FF6159', neutral: '#A2A2A2' },
   accent: { tag: '#36B469', highlight: '#C4527C', heart: '#EF4242' },
   seesaw: { bar: '#E3DED3', fulcrum: '#6E6878' },
+  chip: { fill: '#F5F5F5', ink: '#1A1A1A' },
+  // Cards waiting behind the top card: [furthest, nearer], on the Table and inside My Deck.
+  stack: { table: ['#F5F5F5', '#EFEFEF'], drawer: ['#D2D2D2', '#DEDEDE'] },
+  // The My Deck drawer (Figma "deck": back panel + front lip).
+  drawer: {
+    backClosed: ['#6E6E6E', '#ACACAC'],
+    backOpen: ['#AAAAAA', '#9B9B9B'],
+    front: ['#EFEFEF', '#9D9D9D'],
+    edge: '#FFFFFF',
+    handle: '#A2A2A2',
+    hint: '#FFFFFF',
+    pill: 'rgba(255,255,255,0.9)',
+    pillInk: '#1A1A1A',
+    pillIcon: '#5C5C5C',
+  },
   glowOpacity: 0.9,
 };
 
@@ -120,6 +135,19 @@ const dark: typeof light = {
   action: { primary: '#F6F1E7', onPrimary: '#0B0A0F', positive: '#2FB45C', negative: '#F0544C', neutral: '#4A4552' },
   accent: { tag: '#5FD58E', highlight: '#FF8FB6', heart: '#FF5A5A' },
   seesaw: { bar: '#3A3542', fulcrum: '#8F889A' },
+  chip: { fill: '#1E1B24', ink: '#F6F1E7' },
+  stack: { table: ['#1A1820', '#211E27'], drawer: ['#2C2833', '#34303C'] },
+  drawer: {
+    backClosed: ['#050407', '#1E1B24'],
+    backOpen: ['#1C1A21', '#141218'],
+    front: ['#2A2631', '#141218'],
+    edge: 'rgba(255,255,255,0.10)',
+    handle: '#4A4552',
+    hint: '#B4AEBD',
+    pill: 'rgba(30,27,36,0.92)',
+    pillInk: '#F6F1E7',
+    pillIcon: '#B4AEBD',
+  },
   glowOpacity: 0.22,
 };
 
@@ -128,12 +156,14 @@ export type ThemeColors = typeof light;
 const shadows = {
   light: {
     card: '0px 16px 48px rgba(17,17,26,0.10), 0px 8px 24px rgba(17,17,26,0.10), 0px 1px 0px rgba(17,17,26,0.10)',
+    chip: '0px 16px 48px rgba(17,17,26,0.10), 0px 8px 24px rgba(17,17,26,0.10), 0px 1px 0px rgba(17,17,26,0.10)',
     float: '0px 48px 100px rgba(17,12,46,0.15)',
     sheet: '0px -4px 16px rgba(0,0,0,0.16)',
     row: '0px 2px 8px rgba(99,99,99,0.20)',
   },
   dark: {
     card: '0px 16px 48px rgba(0,0,0,0.45), 0px 1px 0px rgba(255,255,255,0.04)',
+    chip: '0px 8px 24px rgba(0,0,0,0.4)',
     float: '0px 48px 100px rgba(0,0,0,0.55)',
     sheet: '0px -4px 16px rgba(0,0,0,0.5)',
     row: '0px 2px 8px rgba(0,0,0,0.4)',

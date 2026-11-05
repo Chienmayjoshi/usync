@@ -47,19 +47,21 @@ type Props = {
   onUpdate?: (card: Card) => void;
   answer?: (card: Card) => CardAnswers | undefined;
   footer?: (card: Card) => ReactNode;
+  /** Where the stack sits: the cards waiting behind take that surface's shades. */
+  surface?: 'table' | 'drawer';
 };
 
 const THRESHOLD = 110;
 const FLING = 900;
 
 /** A stack of cards: only the top one is live; two more peek out above it. */
-export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer }: Props) {
+export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, surface = 'table' }: Props) {
   const progress = useSharedValue(0);
   const s = useStyles();
   const [top, ...rest] = cards;
   return (
     <View style={s.stack}>
-      {rest.slice(0, 2).reverse().map((c, i, arr) => <Behind key={c.id} level={arr.length - i} progress={progress} />)}
+      {rest.slice(0, 2).reverse().map((c, i, arr) => <Behind key={c.id} level={arr.length - i} progress={progress} surface={surface} />)}
       {top && (
         <TopCard
           key={`${top.id}:${top.story.length}:${top.request ?? ''}`}
@@ -77,15 +79,31 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   );
 }
 
-/** Cards waiting their turn peek out above the top one, each a shade darker. */
-function Behind({ level, progress }: { level: number; progress: SharedValue<number> }) {
+/**
+ * Cards waiting their turn peek out above the top one, as in Figma: the nearer one 302 wide,
+ * 18 above and tilted 2deg one way; the further one 254 wide, 52 above and tilted the other way.
+ */
+const BEHIND = {
+  1: { width: 302, height: 259, top: 26, rotate: '-2deg' },
+  2: { width: 254, height: 200, top: 4, rotate: '2deg' },
+} as const;
+
+function Behind({ level, progress, surface }: { level: number; progress: SharedValue<number>; surface: 'table' | 'drawer' }) {
   const t = useTheme();
   const s = useStyles();
+  const spec = BEHIND[level === 1 ? 1 : 2];
+  const shade = t.color.stack[surface][level === 1 ? 1 : 0];
   const style = useAnimatedStyle(() => {
-    const lvl = level - progress.value;
-    return { transform: [{ translateY: -lvl * 16 }, { scale: 1 - lvl * 0.06 }] };
+    // As the top card leaves, the cards behind settle forward one step.
+    const step = progress.value;
+    return { transform: [{ translateY: step * (level === 1 ? 26 : 22) }, { rotate: spec.rotate }] };
   });
-  return <Animated.View style={[s.behind, { backgroundColor: level === 1 ? t.color.bg.stack1 : t.color.bg.stack2 }, style]} pointerEvents="none" />;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[s.behind, { width: spec.width, height: spec.height, top: spec.top, marginLeft: -spec.width / 2, backgroundColor: shade }, style]}
+    />
+  );
 }
 
 type TopProps = {
@@ -275,9 +293,9 @@ function TopCard({ card, progress, actions, drop, onDelete, onUpdate, answers, f
 }
 
 const useStyles = makeStyles((t) => ({
-  stack: { paddingTop: 32 },
+  stack: { paddingTop: 52, width: '100%', maxWidth: 350, alignSelf: 'center' },
   top: { zIndex: 3 },
-  behind: { position: 'absolute', left: 0, right: 0, top: 32, height: 120, borderRadius: t.radius.lg, zIndex: 1 },
+  behind: { position: 'absolute', left: '50%', borderRadius: 24, borderWidth: 1, borderColor: t.color.border.card, zIndex: 1 },
   stamp: { position: 'absolute', left: -8, right: -8, alignItems: 'center' },
   stampText: { textAlign: 'center', fontSize: 44, lineHeight: 46 },
   stampRight: { top: '40%', transform: [{ rotate: '-8deg' }] },

@@ -9,7 +9,7 @@ import { Text } from './Text';
 type Person = { initial: string | null; avatar: string | null; color: PersonColor };
 
 /** One person: their emoji if they picked one, else their initial, on their color. */
-export function Avatar({ initial, avatar, color, size = 44 }: Person & { size?: number }) {
+export function Avatar({ initial, avatar, color, size = 48 }: Person & { size?: number }) {
   const t = useTheme();
   const s = useStyles();
   return (
@@ -52,7 +52,7 @@ export function AvatarPair({ me, partner, wrapPartner = (n) => n, onPress }: Pro
 
 const useStyles = makeStyles((t) => ({
   row: { flexDirection: 'row' },
-  av: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: t.color.bg.canvas, overflow: 'hidden' },
+  av: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: t.color.bg.canvas, overflow: 'hidden' },
   second: { marginLeft: -8 },
   empty: { borderStyle: 'dashed', borderColor: t.color.border.dashed, backgroundColor: t.color.bg.surface },
 }));

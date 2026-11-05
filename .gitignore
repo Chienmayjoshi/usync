@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Licensed fonts: embedded in the app, not redistributed. Run scripts/fetch-fonts.sh
+assets/fonts/

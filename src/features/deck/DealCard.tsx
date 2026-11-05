@@ -6,11 +6,14 @@ import { useNames } from '@/features/account/account';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import type { PersonColor, Tone } from '@/theme/tokens';
 import { Avatar } from '@/ui/AvatarPair';
-import { Glow } from '@/ui/Glow';
+import { Blobs } from '@/ui/Glow';
 import { PopButton } from '@/ui/PopButton';
 import { Text } from '@/ui/Text';
 
 import { type Card, forMe, isQuick } from './model';
+
+/** Figma card: 350 x 300. */
+export const CARD_H = 300;
 
 export type People = { me: PersonColor; partner: PersonColor };
 
@@ -39,7 +42,7 @@ type Props = {
 };
 
 /** A deck card: the job on the front; its story (or the delete question) on the back. */
-export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = 300 }: Props) {
+export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = CARD_H }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -63,15 +66,21 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
   return (
     <View>
       <Animated.View style={[s.face, { minHeight }, s.hidden, front]}>
-        <Glow colors={tone.glow} />
+        <Blobs
+          opacity={t.scheme === 'light' ? 0.8 : undefined}
+          blobs={[
+            { x: -12, y: -46, size: 152, blur: 84, color: tone.glow[0] },
+            { x: 178, y: -46, size: 152, blur: 84, color: tone.glow[1] },
+          ]}
+        />
         {card.surprise && <Rings />}
         <View style={s.top}>
           <View style={s.people}>
             {people.map((p, i) => (
               <View key={p} style={i > 0 && s.overlap}>
                 {p === 'me'
-                  ? <Avatar initial={names.initials.a} avatar={names.avatars.a} color={names.colors.me} size={36} />
-                  : <Avatar initial={names.initials.b} avatar={names.avatars.b} color={names.colors.partner} size={36} />}
+                  ? <Avatar initial={names.initials.a} avatar={names.avatars.a} color={names.colors.me} size={32} />
+                  : <Avatar initial={names.initials.b} avatar={names.avatars.b} color={names.colors.partner} size={32} />}
               </View>
             ))}
           </View>
@@ -81,12 +90,11 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
             </View>
           )}
         </View>
-        <View style={s.spacer} />
-        <Text variant="display/xl">{card.title}</Text>
+        <Text variant="display/xl" color={t.color.text.primary}>{card.title}</Text>
         {card.status === 'waiting' ? (
           <View style={s.waiting}><Text variant="label/md" color={t.color.text.secondary}>Waiting on someone else</Text></View>
         ) : (
-          <Text variant="body/sm" color={t.color.text.secondary}>{meta}</Text>
+          <Text variant="body/md" color={t.color.text.secondary}>{meta}</Text>
         )}
         {asking && answers && (
           <View style={s.answers}>
@@ -152,8 +160,8 @@ function Rings() {
 
 const useStyles = makeStyles((t) => ({
   face: {
-    backgroundColor: t.color.bg.raised, borderRadius: t.radius.lg, borderWidth: 2, borderColor: t.color.border.card,
-    padding: 24, gap: 10, overflow: 'hidden', boxShadow: t.shadow.card,
+    backgroundColor: t.color.bg.raised, borderRadius: 24, borderWidth: 2, borderColor: t.color.border.card,
+    paddingTop: 40, paddingHorizontal: 24, paddingBottom: 24, gap: 16, overflow: 'hidden', boxShadow: t.shadow.float,
   },
   hidden: { backfaceVisibility: 'hidden' },
   back: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
@@ -161,8 +169,8 @@ const useStyles = makeStyles((t) => ({
   people: { flexDirection: 'row' },
   overlap: { marginLeft: -8 },
   tag: {
-    backgroundColor: t.scheme === 'light' ? '#FFFFFF' : 'rgba(0,0,0,0.4)', borderRadius: t.radius.full,
-    paddingHorizontal: 12, paddingVertical: 6, flexShrink: 1, boxShadow: t.shadow.row,
+    backgroundColor: t.scheme === 'light' ? '#FFFFFF' : 'rgba(0,0,0,0.4)', borderRadius: 40, borderWidth: 1, borderColor: t.color.border.subtle,
+    paddingHorizontal: 12, paddingVertical: 4, flexShrink: 1,
   },
   waiting: { alignSelf: 'flex-start', backgroundColor: t.color.bg.sunken, borderRadius: t.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   answers: { flexDirection: 'row', gap: 12, marginTop: 8 },

@@ -11,6 +11,12 @@ import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
 import { Text } from './Text';
 
+/**
+ * Gap under the floating nav: Figma leaves 48 under it on a 34pt-inset iPhone, so it is the
+ * system inset + 14 on both platforms. That also lifts it clear of Android's 3 button bar.
+ */
+export const navBottom = (inset: number) => inset + 14;
+
 const ICONS: Record<string, { icon: Icon; label: (partner: string | null) => string }> = {
   index: { icon: Cards, label: () => 'Table' },
   us: { icon: Heart, label: (p) => p ?? 'Partner' },
@@ -24,7 +30,7 @@ export function TabBar({ state, navigateToTab, insets, onHeight }: BottomTabBarP
   const names = useNames();
   return (
     <View
-      style={[s.wrap, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      style={[s.wrap, { paddingBottom: navBottom(insets.bottom) }]}
       pointerEvents="box-none"
       onLayout={(e) => onHeight?.(e.nativeEvent.layout.height)}
     >

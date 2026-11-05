@@ -7,13 +7,14 @@ import { HeaderAvatars } from '@/features/account/HeaderAvatars';
 import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
-import { MyDeckTray, TRAY_PEEK } from '@/features/deck/MyDeckTray';
+import { DeckDrawer } from '@/features/deck/DeckDrawer';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { FilterChips } from '@/ui/FilterChips';
 import { PopButton } from '@/ui/PopButton';
+import { navBottom } from '@/ui/TabBar';
 import { Text } from '@/ui/Text';
 
 /**
@@ -33,7 +34,6 @@ export default function TableScreen() {
   const [expanded, setExpanded] = useState(false);
   const [tableWhen, setTableWhen] = useState<When>('all');
   const [deckWhen, setDeckWhen] = useState<When>('all');
-  const [headerH, setHeaderH] = useState(150);
   const open = useSharedValue(0);
   const rect = useSharedValue<Rect>({ x: -1000, y: -1000, w: 0, h: 0 });
   const trayReady = useSharedValue(0);
@@ -43,7 +43,7 @@ export default function TableScreen() {
   const deck = deckCards(state);
   const tableShown = byWhen(table, tableWhen);
   const deckShown = byWhen(deck, deckWhen);
-  const top = insets.top + headerH;
+  const headerTop = insets.top + 18;
   const them = names.partnerOr;
 
   const counts = (cards: Card[]) => ({ all: cards.length, week: byWhen(cards, 'week').length, later: byWhen(cards, 'later').length });
@@ -54,29 +54,19 @@ export default function TableScreen() {
 
   return (
     <View style={s.screen}>
-      <View style={[s.header, { paddingTop: insets.top + 8 }]} onLayout={(e) => setHeaderH(e.nativeEvent.layout.height - insets.top)}>
-        <View style={s.titleRow}>
-          <Text variant="display/lg" style={s.flex}>{expanded ? 'My deck' : 'On table'}</Text>
-          <HeaderAvatars />
-        </View>
-        {expanded ? (
-          <FilterChips
-            value={deckWhen}
-            onChange={setDeckWhen}
-            glow={t.tones[names.colors.me].glow}
-            options={[{ value: 'all', label: 'My Tasks', count: dc.all }, { value: 'week', label: 'This week', count: dc.week }, { value: 'later', label: 'Later', count: dc.later }]}
-          />
-        ) : (
-          <FilterChips
-            value={tableWhen}
-            onChange={setTableWhen}
-            glow={t.tones[names.colors.me].glow}
-            options={[{ value: 'all', label: 'All Tasks', count: tc.all }, { value: 'week', label: 'This week', count: tc.week }, { value: 'later', label: 'Later', count: tc.later }]}
-          />
-        )}
+      {/* Figma: header row 68 tall at y=72 (18 under the status bar), chips 32 below it, the stack 20 below them. */}
+      <View style={[s.header, { top: headerTop }]}>
+        <Text variant="display/lg" style={s.flex}>{expanded ? 'My deck' : 'On table'}</Text>
+        <HeaderAvatars />
       </View>
 
-      <Animated.View style={[s.table, { paddingBottom: TRAY_PEEK + 12 }, tableFade]} pointerEvents={expanded ? 'none' : 'auto'}>
+      <Animated.View style={[s.table, { top: headerTop + 100 }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
+        <FilterChips
+          value={tableWhen}
+          onChange={setTableWhen}
+          glow={t.tones[names.colors.me].glow}
+          options={[{ value: 'all', label: 'All Tasks', count: tc.all }, { value: 'week', label: 'This week', count: tc.week }, { value: 'later', label: 'Later', count: tc.later }]}
+        />
         {!partner && inviteCode && <InviteStrip code={inviteCode} />}
         {!ready ? null : tableShown.length ? (
           <CardStack
@@ -101,7 +91,26 @@ export default function TableScreen() {
         )}
       </Animated.View>
 
-      <MyDeckTray open={open} expanded={expanded} setExpanded={setExpanded} top={top} cards={deck} rect={rect} ready={trayReady} hot={hot}>
+      <DeckDrawer
+        open={open}
+        expanded={expanded}
+        setExpanded={setExpanded}
+        openTop={headerTop + 88}
+        navBottom={navBottom(insets.bottom)}
+        cards={deck}
+        rect={rect}
+        ready={trayReady}
+        hot={hot}
+        chips={(
+          <FilterChips
+            value={deckWhen}
+            onChange={setDeckWhen}
+            variant="drawer"
+            glow={t.tones[names.colors.me].glow}
+            options={[{ value: 'all', label: 'My Tasks', count: dc.all }, { value: 'week', label: 'This week', count: dc.week }, { value: 'later', label: 'Later', count: dc.later }]}
+          />
+        )}
+      >
         {deckShown.length ? (
           <CardStack
             cards={deckShown}
@@ -111,6 +120,7 @@ export default function TableScreen() {
             }}
             onDelete={(c) => move(c, 'delete')}
             onUpdate={setUpdating}
+            surface="drawer"
             answer={(c) => (forMe(c) ? { onAccept: () => move(c, 'accept'), onDecline: () => move(c, 'decline') } : undefined)}
           />
         ) : (
@@ -120,7 +130,7 @@ export default function TableScreen() {
             body={deck.length ? 'Nothing here for this filter.' : `Nothing on your deck.\n${table.length} ${table.length === 1 ? 'card is' : 'cards are'} still on the table.`}
           />
         )}
-      </MyDeckTray>
+      </DeckDrawer>
 
       {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </View>
@@ -155,10 +165,9 @@ function InviteStrip({ code }: { code: string }) {
 
 const useStyles = makeStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.color.bg.canvas },
-  header: { paddingHorizontal: 20, gap: 12, paddingBottom: 8, zIndex: 6, backgroundColor: t.color.bg.canvas },
-  titleRow: { flexDirection: 'row', alignItems: 'center', minHeight: 56 },
+  header: { position: 'absolute', left: 20, right: 20, height: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 6 },
   flex: { flex: 1 },
-  table: { flex: 1, paddingHorizontal: 20, justifyContent: 'center', gap: 12 },
+  table: { position: 'absolute', left: 20, right: 20, gap: 20 },
   empty: { alignItems: 'center', gap: 10 },
   art: { width: 200, height: 220 },
   emptyTitle: { textTransform: 'none', fontSize: 26 },
