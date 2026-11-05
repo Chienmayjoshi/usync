@@ -115,6 +115,7 @@ export default function TableScreen() {
           <CardStack
             cards={deckShown}
             actions={{
+              up: { label: 'Next', color: t.color.text.secondary, run: (c) => move(c, 'next') },
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
               left: { label: 'Back to table', color: t.color.action.negative, run: (c) => move(c, 'table') },
             }}

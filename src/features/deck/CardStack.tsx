@@ -67,7 +67,8 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
           key={`${top.id}:${top.story.length}:${top.request ?? ''}`}
           card={top}
           progress={progress}
-          actions={top.request && forMe(top) ? {} : actions}
+          // A request waits on an answer, but you can still look past it.
+          actions={top.request && forMe(top) ? (actions.up ? { up: actions.up } : {}) : actions}
           drop={forMe(top) ? undefined : drop}
           onDelete={onDelete}
           onUpdate={onUpdate}
