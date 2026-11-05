@@ -17,6 +17,12 @@ export const motion = {
   sheetIn: { duration: 280, easing: out },
   sheetOut: { duration: 200, easing: inOut },
   panel: { duration: 300, easing: out },
+  /**
+   * Card stack scroll, from assets/deckscroll.mp4: the stack follows the finger, and a released
+   * swipe finishes its step in `duration` ms (scaled by the distance left). Raise it to slow the
+   * stack down, lower it to speed it up. `distance` is the finger travel for one card.
+   */
+  stackScroll: { duration: 180, easing: out, distance: 200 },
   layout: 220,
   dealStagger: 90,
 } as const;

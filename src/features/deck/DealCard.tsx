@@ -39,10 +39,12 @@ type Props = {
   /** Extra action under the card details, e.g. "Ask for this" on the partner's deck. */
   footer?: React.ReactNode;
   minHeight?: number;
+  /** Off when the stack draws the shadow itself, so it can fade as the card moves back. */
+  shadow?: boolean;
 };
 
 /** A deck card: the job on the front; its story (or the delete question) on the back. */
-export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = CARD_H }: Props) {
+export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = CARD_H, shadow = true }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -65,7 +67,7 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
 
   return (
     <View>
-      <Animated.View style={[s.face, { minHeight }, s.hidden, front]}>
+      <Animated.View style={[s.face, { minHeight }, !shadow && s.flat, s.hidden, front]}>
         <Blobs
           opacity={t.scheme === 'light' ? 0.8 : undefined}
           blobs={[
@@ -105,7 +107,7 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
         {footer}
       </Animated.View>
 
-      <Animated.View style={[s.face, s.back, s.hidden, rear]}>
+      <Animated.View style={[s.face, s.back, !shadow && s.flat, s.hidden, rear]}>
         {back === 'delete' ? (
           <View style={s.deleteFace}>
             <Text variant="display/2xl" color={t.color.action.negative} style={s.center}>Delete task?</Text>
@@ -164,6 +166,7 @@ const useStyles = makeStyles((t) => ({
     paddingTop: 40, paddingHorizontal: 24, paddingBottom: 24, gap: 16, overflow: 'hidden', boxShadow: t.shadow.float,
   },
   hidden: { backfaceVisibility: 'hidden' },
+  flat: { boxShadow: [] },
   back: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   people: { flexDirection: 'row' },

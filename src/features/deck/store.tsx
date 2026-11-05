@@ -181,7 +181,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     if (a.type === 'clearUndo') { prev.current = null; return; }
     if (a.type === 'drop') { drop(a.cards, a.place, a.surprise).catch(fail); return; }
     // Next card is a private glance: nothing changes for anyone.
-    if (a.type === 'next') return;
+    if (a.type === 'next' || a.type === 'prev') return;
     if (a.type === 'delete') { prev.current = null; supabase.rpc('delete_task', { task: a.id }).then(({ error }) => error && fail(error)); return; }
     if (a.type === 'undo') {
       const p = prev.current;

@@ -53,6 +53,7 @@ export type Move = 'grab' | 'ask' | 'together' | 'ask_for' | 'accept' | 'decline
 export type DeckAction =
   | { type: Move; id: string }
   | { type: 'next'; id: string }
+  | { type: 'prev'; id: string }
   | { type: 'delete'; id: string }
   | { type: 'drop'; cards: Card[]; place: DropPlace; surprise?: boolean }
   | { type: 'undo' }
@@ -65,6 +66,11 @@ const update = (cards: Card[], id: string, patch: Partial<Card>) =>
   cards.map((c) => (c.id === id ? { ...c, ...patch, story: patch.story ?? c.story } : c));
 
 const find = (cards: Card[], id: string) => cards.find((c) => c.id === id);
+
+const toFront = (cards: Card[], id: string) => {
+  const c = find(cards, id);
+  return c ? [c, ...cards.filter((x) => x.id !== id)] : cards;
+};
 
 const toBack = (cards: Card[], id: string) => {
   const c = find(cards, id);
@@ -93,6 +99,9 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     case 'next':
       // Not now: the next card on the Table comes up. Local only, nothing changes for anyone.
       return { ...state, cards: toBack(state.cards, c.id) };
+    case 'prev':
+      // Back a card: the one you passed last returns to the front. Local only, like next.
+      return { ...state, cards: toFront(state.cards, c.id) };
     case 'grab':
       if (c.status === 'done' || !(c.owner === 'table' || (c.request === 'take' && c.owner === 'me'))) return state;
       return move({ owner: 'me', status: 'active', ...cleared }, 'You took it', 'Taken');

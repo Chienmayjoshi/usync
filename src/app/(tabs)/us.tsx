@@ -42,7 +42,9 @@ export default function PartnerScreen() {
           <Text variant="label/md" color={t.color.text.secondary}>{`On ${them}’s deck  ·  ${ranked.length}`}</Text>
           <CardStack
             cards={ranked}
-            actions={{ up: { label: 'Next', color: t.color.text.secondary, run: (c) => setOrder((o) => [...o.filter((x) => x !== c.id), c.id]) } }}
+            actions={{}}
+            onNext={(c) => setOrder(ranked.map((x) => x.id).filter((id) => id !== c.id).concat(c.id))}
+            onPrev={(c) => setOrder([c.id, ...ranked.map((x) => x.id).filter((id) => id !== c.id)])}
             onUpdate={setUpdating}
             footer={(c) => (c.status === 'active' && !c.request ? (
               <View style={s.footer}>

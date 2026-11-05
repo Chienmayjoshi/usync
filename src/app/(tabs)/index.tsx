@@ -19,7 +19,8 @@ import { Text } from '@/ui/Text';
 
 /**
  * The Table: everything nobody has claimed yet, as a stack. Drag a card down into My Deck to
- * take it, swipe up for the next one, right to do it together, left to ask your partner.
+ * take it (press, then drag), swipe up and down through the stack, right to do it together, left
+ * to ask your partner.
  * My Deck rises from the bottom to show what you carry.
  */
 export default function TableScreen() {
@@ -71,8 +72,9 @@ export default function TableScreen() {
         {!ready ? null : tableShown.length ? (
           <CardStack
             cards={tableShown}
+            onNext={(c) => move(c, 'next')}
+            onPrev={(c) => move(c, 'prev')}
             actions={{
-              up: { label: 'Next', color: t.color.text.secondary, run: (c) => move(c, 'next') },
               ...(partner ? {
                 right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
                 left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
@@ -114,8 +116,9 @@ export default function TableScreen() {
         {deckShown.length ? (
           <CardStack
             cards={deckShown}
+            onNext={(c) => move(c, 'next')}
+            onPrev={(c) => move(c, 'prev')}
             actions={{
-              up: { label: 'Next', color: t.color.text.secondary, run: (c) => move(c, 'next') },
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
               left: { label: 'Back to table', color: t.color.action.negative, run: (c) => move(c, 'table') },
             }}

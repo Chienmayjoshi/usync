@@ -17,10 +17,11 @@ export function useMoves() {
   const undoable = (title: string, body: string) =>
     toast({ kind: 'info', title, body, action: { label: 'Undo', onPress: () => { haptics.tick(); dispatch({ type: 'undo' }); } }, onExpire: () => dispatch({ type: 'clearUndo' }) });
 
-  return (card: Card, move: Move | 'next' | 'delete') => {
+  return (card: Card, move: Move | 'next' | 'prev' | 'delete') => {
     dispatch({ type: move, id: card.id });
     switch (move) {
       case 'next':
+      case 'prev':
         return haptics.tick();
       case 'delete':
         haptics.take();

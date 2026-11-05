@@ -22,6 +22,15 @@ describe('the table', () => {
     expect(s.undo).toBeNull();
   });
 
+  it('prev brings a card back to the front, undoing next', () => {
+    const start = state([card('a'), card('b'), card('c')]);
+    const passed = deckReducer(start, { type: 'next', id: 'a' });
+    expect(tableCards(passed).map((c) => c.id)).toEqual(['b', 'c', 'a']);
+    const back = deckReducer(passed, { type: 'prev', id: 'a' });
+    expect(tableCards(back).map((c) => c.id)).toEqual(['a', 'b', 'c']);
+    expect(back.undo).toBeNull();
+  });
+
   it('asking my partner sends the card to them as a request', () => {
     const s = deckReducer(state([card('a')]), { type: 'ask', id: 'a' });
     expect(s.cards[0]).toMatchObject({ owner: 'partner', status: 'deal', request: 'take', requestedBy: 'me' });
