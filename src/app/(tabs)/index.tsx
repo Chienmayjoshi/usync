@@ -8,7 +8,6 @@ import { HeaderAvatars, shareInvite } from '@/features/account/HeaderAvatars';
 import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { DeckList } from '@/features/deck/DeckList';
-import { assignDots } from '@/features/deck/dots';
 import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
 import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
@@ -93,7 +92,7 @@ export default function TableScreen() {
               right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
               left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
             }}
-            drop={solo ? undefined : { rect, slot, ready: trayReady, hot, dotFor: (c) => assignDots([...deck, c]).get(c.id)!, onDrop: (c) => move(c, 'grab') }}
+            drop={solo ? undefined : { rect, slot, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
             onDelete={(c) => move(c, 'delete')}
             onUpdate={setUpdating}
           />

@@ -30,7 +30,6 @@ import { ease, motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Blobs } from '@/ui/Glow';
 import { Text } from '@/ui/Text';
-import { ToneDot } from '@/ui/ToneDot';
 
 import { type CardAnswers, DealCard, toneFor } from './DealCard';
 import { type Card, forMe } from './model';
@@ -48,8 +47,6 @@ export type DropTarget = {
   hot: SharedValue<number>;
   /** Where the card, as a circle, comes to rest in the target (window coordinates). */
   slot: SharedValue<{ x: number; y: number }>;
-  /** The lights of the circle a card becomes: the same as its dot once it lands. */
-  dotFor: (card: Card) => readonly [string, string];
   onDrop: (card: Card) => void;
 };
 
@@ -497,7 +494,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
             />
           );
         })}
-        {dropNow && <Morph card={top} dot={dropNow.dotFor(top)} width={stackW} height={topH} hand={hand} grab={grab} />}
+        {dropNow && <Morph card={top} width={stackW} height={topH} hand={hand} grab={grab} />}
       </Animated.View>
     </GestureDetector>
   );
@@ -513,14 +510,15 @@ type HandValues = {
  * The carried card's silhouette as it turns into a circle: it starts as the card's own shape and
  * colors (so it takes over seamlessly as the card fades) and ends as the 80 round token.
  */
-function Morph({ card, dot: dotColors, width, height, hand, grab }: { card: Card; dot: readonly [string, string]; width: number; height: number; hand: HandValues; grab: SharedValue<{ x: number; y: number; set: number }> }) {
+function Morph({ card, width, height, hand, grab }: { card: Card; width: number; height: number; hand: HandValues; grab: SharedValue<{ x: number; y: number; set: number }> }) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
-  const tone = toneFor(card, names.colors);
-  const spec = t.tones[tone];
+  const spec = t.tones[toneFor(card, names.colors)];
   const { tx, ty, morph, landing } = hand;
 
+  // The card's own face, closing in on its middle: the outline shrinks and rounds to a circle
+  // while the colors and lights stay put behind it, so it is the card itself becoming the circle.
   const box = useAnimatedStyle(() => {
     const m = morph.value;
     const w = interpolate(m, [0, 1], [width, CIRCLE]);
@@ -540,12 +538,17 @@ function Morph({ card, dot: dotColors, width, height, hand, grab }: { card: Card
       ],
     };
   });
-  const face = useAnimatedStyle(() => ({ opacity: 1 - interpolate(morph.value, [0.35, 0.9], [0, 1], Extrapolation.CLAMP) }));
-  const dot = useAnimatedStyle(() => ({ opacity: interpolate(morph.value, [0.35, 0.9], [0, 1], Extrapolation.CLAMP) }));
+  const face = useAnimatedStyle(() => {
+    const m = morph.value;
+    const w = interpolate(m, [0, 1], [width, CIRCLE]);
+    const h = interpolate(m, [0, 1], [height, CIRCLE]);
+    // Inside the 1.5 stroke, so offset by it.
+    return { left: (w - width) / 2 - 1.5, top: (h - height) / 2 - 1.5 };
+  });
 
   return (
-    <Animated.View style={[s.morph, box]} pointerEvents="none">
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: spec.card }, face]}>
+    <Animated.View style={[s.morph, { backgroundColor: spec.card }, box]} pointerEvents="none">
+      <Animated.View style={[s.face, { width, height, backgroundColor: spec.card }, face]}>
         <Blobs
           opacity={1}
           blobs={[
@@ -553,9 +556,6 @@ function Morph({ card, dot: dotColors, width, height, hand, grab }: { card: Card
             { x: 86.5, y: -138.87, size: 333, blur: 0, sigma: 140, color: spec.cardGlow[1] },
           ]}
         />
-      </Animated.View>
-      <Animated.View style={[s.dot, dot]}>
-        <ToneDot colors={dotColors} size={CIRCLE} />
       </Animated.View>
     </Animated.View>
   );
@@ -673,7 +673,7 @@ const useStyles = makeStyles((t) => ({
     position: 'absolute', overflow: 'hidden', borderWidth: 1.5, borderColor: '#FFFFFF',
     boxShadow: '0px 25px 50px -12px rgba(0,0,0,0.25)', zIndex: 10,
   },
-  dot: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  face: { position: 'absolute' },
   layer: { position: 'absolute', top: 52, left: 0, right: 0 },
   plate: { ...StyleSheet.absoluteFill, borderRadius: 24, backgroundColor: t.color.bg.raised, boxShadow: t.shadow.deal },
   hide: { backfaceVisibility: 'hidden' },

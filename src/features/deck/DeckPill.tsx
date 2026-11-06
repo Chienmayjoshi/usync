@@ -150,7 +150,8 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const idleEdge = useAnimatedStyle(() => ({ opacity: 1 - ready.value * (1 - shut.value) }));
   const hint = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - filled.value) * (1 - shut.value) }));
   const deck = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * filled.value * (1 - shut.value) }));
-  const chevrons = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value), transform: [{ translateY: bob.value * 3 }] }));
+  const drop = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
+  const chevrons = useAnimatedStyle(() => ({ transform: [{ translateY: bob.value * 3 }] }));
   const close = useAnimatedStyle(() => ({ opacity: shut.value }));
 
   const dots = assignDots(cards);
@@ -198,8 +199,9 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
               </View>
             </Animated.View>
 
-            <Animated.View style={[s.layer, chevrons]} pointerEvents="none">
-              <ChevronsDownIcon color={p.icon} />
+            <Animated.View style={[s.layer, s.label, drop]} pointerEvents="none">
+              <Animated.View style={chevrons}><ChevronsDownIcon color={p.icon} /></Animated.View>
+              <Text style={s.text} color={p.ink}>Drop it here</Text>
             </Animated.View>
 
             <Animated.View style={[s.layer, s.label, close]} pointerEvents="none">
