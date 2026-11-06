@@ -1,6 +1,6 @@
-import { useId } from 'react';
-import { StyleSheet } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import { useId, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Svg, { Defs, Ellipse, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme/ThemeProvider';
 
@@ -85,22 +85,40 @@ export function Blobs({ blobs, opacity }: { blobs: Blob[]; opacity?: number }) {
   const t = useTheme();
   const id = useId().replace(/:/g, '');
   const o = opacity ?? (t.scheme === 'light' ? 1 : t.color.glowOpacity * 1.6);
+  // Drawn at the box's measured size, each light as a radial gradient painted over the whole box
+  // (userSpaceOnUse). Native clips huge shapes and percentage sized canvases unpredictably, so no
+  // ellipse ever reaches past the box.
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
   return (
-    <Svg width="100%" height="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Defs>
-        {blobs.map((b, i) => (
-          <RadialGradient key={i} id={`g${id}${i}`} cx="50%" cy="50%" r="50%">
-            {(b.sigma != null
-              ? discStops(b.size / 2, b.sigma)
-              : [{ offset: 0, alpha: 1 }, { offset: (b.size / 2 / (b.size / 2 + b.blur)) * 0.7, alpha: 0.85 }, { offset: 1, alpha: 0 }]
-            ).map((st) => <Stop key={st.offset} offset={String(st.offset)} stopColor={b.color} stopOpacity={o * st.alpha} />)}
-          </RadialGradient>
-        ))}
-      </Defs>
-      {blobs.map((b, i) => {
-        const r = b.size / 2 + (b.sigma != null ? 3 * b.sigma : b.blur);
-        return <Ellipse key={i} cx={b.x + b.size / 2} cy={b.y + b.size / 2} rx={r} ry={r} fill={`url(#g${id}${i})`} />;
-      })}
-    </Svg>
+    <View
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+      onLayout={(e) => { const { width, height } = e.nativeEvent.layout; if (!box || box.w !== width || box.h !== height) setBox({ w: width, h: height }); }}
+    >
+      {box && (
+        <Svg width={box.w} height={box.h}>
+          <Defs>
+            {blobs.map((b, i) => (
+              <RadialGradient
+                key={i}
+                id={`g${id}${i}`}
+                gradientUnits="userSpaceOnUse"
+                cx={b.x + b.size / 2}
+                cy={b.y + b.size / 2}
+                fx={b.x + b.size / 2}
+                fy={b.y + b.size / 2}
+                r={b.size / 2 + (b.sigma != null ? 3 * b.sigma : b.blur)}
+              >
+                {(b.sigma != null
+                  ? discStops(b.size / 2, b.sigma)
+                  : [{ offset: 0, alpha: 1 }, { offset: (b.size / 2 / (b.size / 2 + b.blur)) * 0.7, alpha: 0.85 }, { offset: 1, alpha: 0 }]
+                ).map((st) => <Stop key={st.offset} offset={String(st.offset)} stopColor={b.color} stopOpacity={o * st.alpha} />)}
+              </RadialGradient>
+            ))}
+          </Defs>
+          {blobs.map((_, i) => <Rect key={i} x={0} y={0} width={box.w} height={box.h} fill={`url(#g${id}${i})`} />)}
+        </Svg>
+      )}
+    </View>
   );
 }

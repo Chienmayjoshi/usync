@@ -16,10 +16,10 @@ const LARGE: Omit<Blob, 'color'>[] = [
   { x: 101 - 71, y: 99 - 71, size: 142, blur: 0, sigma: 17 },
 ];
 
-/** A card as a round token: white, two of its tone's lights, a 1.5 white stroke. */
-export function ToneDot({ tone, size = 32 }: { tone: Tone; size?: number }) {
+/** A card as a round token: white, two lights (the task's own, or a tone's), a 1.5 white stroke. */
+export function ToneDot({ tone, colors: own, size = 32 }: { tone?: Tone; colors?: readonly [string, string]; size?: number }) {
   const t = useTheme();
-  const colors = t.tones[tone].dot;
+  const colors = own ?? t.tones[tone ?? 'neutral'].dot;
   const base = size >= 56 ? 80 : 32;
   const k = size / base;
   const blobs = (base === 80 ? LARGE : SMALL).map((b, i) => ({

@@ -16,7 +16,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { useNames } from '@/features/account/account';
 import { motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { ArrowUpIcon, ChevronsDownIcon, CloseIcon } from '@/ui/DeckIcons';
@@ -24,7 +23,7 @@ import { Text } from '@/ui/Text';
 import { ToneDot } from '@/ui/ToneDot';
 
 import type { Rect } from './CardStack';
-import { toneFor } from './DealCard';
+import { assignDots } from './dots';
 import type { Card } from './model';
 
 // Figma "ui update 2": the pill is 48 tall inside a 3 padding ring; 233 wide with the hint,
@@ -106,7 +105,6 @@ const pop = () => {
 export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot }: Props) {
   const t = useTheme();
   const s = useStyles();
-  const names = useNames();
   const p = t.color.pill;
   const ref = useAnimatedRef<View>();
   const has = cards.length > 0;
@@ -153,6 +151,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const chevrons = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value), transform: [{ translateY: bob.value * 3 }] }));
   const close = useAnimatedStyle(() => ({ opacity: shut.value }));
 
+  const dots = assignDots(cards);
   const shown = cards.slice(0, 3);
   const more = cards.length - shown.length;
 
@@ -186,7 +185,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
               <View style={s.dots}>
                 {shown.map((c, i) => (
                   <Animated.View key={c.id} entering={pop} style={i > 0 && s.overlap}>
-                    <ToneDot tone={toneFor(c, names.colors)} size={DOT} />
+                    <ToneDot colors={dots.get(c.id)} size={DOT} />
                   </Animated.View>
                 ))}
                 {more > 0 && (

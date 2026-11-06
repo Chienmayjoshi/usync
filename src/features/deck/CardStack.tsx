@@ -48,6 +48,8 @@ export type DropTarget = {
   hot: SharedValue<number>;
   /** Where the card, as a circle, comes to rest in the target (window coordinates). */
   slot: SharedValue<{ x: number; y: number }>;
+  /** The lights of the circle a card becomes: the same as its dot once it lands. */
+  dotFor: (card: Card) => readonly [string, string];
   onDrop: (card: Card) => void;
 };
 
@@ -495,7 +497,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
             />
           );
         })}
-        {canDrop && <Morph card={top} width={stackW} height={topH} hand={hand} grab={grab} />}
+        {dropNow && <Morph card={top} dot={dropNow.dotFor(top)} width={stackW} height={topH} hand={hand} grab={grab} />}
       </Animated.View>
     </GestureDetector>
   );
@@ -511,7 +513,7 @@ type HandValues = {
  * The carried card's silhouette as it turns into a circle: it starts as the card's own shape and
  * colors (so it takes over seamlessly as the card fades) and ends as the 80 round token.
  */
-function Morph({ card, width, height, hand, grab }: { card: Card; width: number; height: number; hand: HandValues; grab: SharedValue<{ x: number; y: number; set: number }> }) {
+function Morph({ card, dot: dotColors, width, height, hand, grab }: { card: Card; dot: readonly [string, string]; width: number; height: number; hand: HandValues; grab: SharedValue<{ x: number; y: number; set: number }> }) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -553,7 +555,7 @@ function Morph({ card, width, height, hand, grab }: { card: Card; width: number;
         />
       </Animated.View>
       <Animated.View style={[s.dot, dot]}>
-        <ToneDot tone={tone} size={CIRCLE} />
+        <ToneDot colors={dotColors} size={CIRCLE} />
       </Animated.View>
     </Animated.View>
   );
@@ -664,7 +666,8 @@ function Layer({ pos, card, head, count, surface, hand, back, answers, footer, o
 }
 
 const useStyles = makeStyles((t) => ({
-  stack: { width: '100%', maxWidth: 350, alignSelf: 'center' },
+  // Full width between the screen's 20 margins (Figma: 350 on a 390 screen), whatever the phone.
+  stack: { width: '100%', alignSelf: 'center' },
   // Figma 223:21908: 1.5 white stroke, shadow 0 25 50 -12 at 25% (Figma blur 50, spread -12).
   morph: {
     position: 'absolute', overflow: 'hidden', borderWidth: 1.5, borderColor: '#FFFFFF',

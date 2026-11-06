@@ -1,5 +1,4 @@
 import { ArchivoBlack_400Regular } from '@expo-google-fonts/archivo-black';
-import { Manrope_300Light } from '@expo-google-fonts/manrope';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -22,7 +21,6 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 export default function RootLayout() {
   const [loaded] = useFonts({
     ArchivoBlack_400Regular,
-    Manrope_300Light,
     'Satoshi-Regular': require('@/../assets/fonts/Satoshi-Regular.otf'),
     'Satoshi-Medium': require('@/../assets/fonts/Satoshi-Medium.otf'),
     'Satoshi-Bold': require('@/../assets/fonts/Satoshi-Bold.otf'),

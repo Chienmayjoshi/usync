@@ -91,7 +91,8 @@ function Tab({ index, pos, meta, active, ink, idleInk, onPress }: TabProps) {
         <Animated.View style={[s.icon, icon]}>
           <Icon color={active ? ink : idleInk} />
         </Animated.View>
-        <Animated.View style={[s.label, { left: 14 + meta.iconW + 12 }, label]}>
+        {/* The label is centred in what the active pill has left once the icon is in (Figma 119:3606). */}
+        <Animated.View style={[s.label, { left: 14 + meta.iconW, width: ACTIVE - 14 - meta.iconW }, label]}>
           <Text variant="title/md" color={ink} style={s.labelText} numberOfLines={1}>{meta.label}</Text>
         </Animated.View>
       </Animated.View>
@@ -123,7 +124,7 @@ const useStyles = makeStyles((t) => {
     },
     tab: { height: 56, justifyContent: 'center', overflow: 'hidden' },
     icon: { position: 'absolute', left: 0, top: 16 },
-    label: { position: 'absolute', top: 17 },
+    label: { position: 'absolute', top: 17, alignItems: 'center' },
     labelText: { fontFamily: 'Satoshi-Bold', fontSize: 16, lineHeight: 22, letterSpacing: -0.032 },
   };
 });
