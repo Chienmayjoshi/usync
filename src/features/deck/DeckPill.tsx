@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import Animated, {
   cancelAnimation,
+  Easing,
   interpolate,
   measure,
   type SharedValue,
+  useAnimatedProps,
   useAnimatedReaction,
   useAnimatedRef,
   useAnimatedStyle,
@@ -35,6 +38,44 @@ const DOT = 32;
 export const PILL_ABOVE_NAV = 24;
 export const PILL_OUTER = H + PAD * 2;
 
+// The ring while a card is carried (Figma 223:21902): a 1px green stroke, full at one end of the
+// pill and fading out along its long edges, running round and round. Drawn on the pill's outline
+// as stacked dashes centred on one point: the more of them overlap, the brighter the stroke, so
+// it peaks at the head and fades both ways. They all share one offset, so the arc travels as one.
+const RING_W = W_FULL - 1;
+const RING_H = PILL_OUTER - 1;
+const RING_R = RING_H / 2;
+/** Starts at the middle of the left end, where Figma's ring is brightest, and runs clockwise. */
+const RING_PATH = `M0.5 ${PILL_OUTER / 2}A${RING_R} ${RING_R} 0 0 1 ${0.5 + RING_R} 0.5H${0.5 + RING_W - RING_R}`
+  + `A${RING_R} ${RING_R} 0 0 1 ${0.5 + RING_W} ${PILL_OUTER / 2}A${RING_R} ${RING_R} 0 0 1 ${0.5 + RING_W - RING_R} ${0.5 + RING_H}`
+  + `H${0.5 + RING_R}A${RING_R} ${RING_R} 0 0 1 0.5 ${PILL_OUTER / 2}Z`;
+const RING_LEN = 2 * (RING_W - RING_H) + Math.PI * RING_H;
+/** Dash lengths, longest (faintest tail) to shortest (the bright core): Figma's arc spans ~55% of the outline. */
+const RING_DASHES = Array.from({ length: 24 }, (_, i) => 330 - i * 12);
+const RING_ALPHA = 0.12;
+/** One lap. */
+const RING_LAP = 1600;
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
+function RingDash({ len, lap, hot, color }: { len: number; lap: SharedValue<number>; hot: SharedValue<number>; color: string }) {
+  const props = useAnimatedProps(() => ({
+    strokeDashoffset: len / 2 - lap.value * RING_LEN,
+    strokeWidth: 1 + hot.value * 0.5,
+  }));
+  return (
+    <AnimatedPath
+      d={RING_PATH}
+      fill="none"
+      stroke={color}
+      strokeDasharray={[len, RING_LEN - len]}
+      strokeOpacity={RING_ALPHA}
+      strokeLinecap="round"
+      animatedProps={props}
+    />
+  );
+}
+
 type Props = {
   cards: Card[];
   /** The list is open: the pill becomes its close button. */
@@ -60,7 +101,7 @@ const pop = () => {
 /**
  * My Deck as a small pill under the Table (Figma 239:23498, notes 239:23499): "Drag a task here
  * to take it" when empty, the deck's colors when not, and while a card is carried it widens,
- * rings green and points down. Tap it to open the list; it then turns into the list's close button.
+ * a green ring runs round it and it points down. Tap it to open the list; it then turns into the list's close button.
  */
 export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot }: Props) {
   const t = useTheme();
@@ -74,6 +115,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const shut = useSharedValue(open ? 1 : 0);
   const filled = useSharedValue(has ? 1 : 0);
   const bob = useSharedValue(0);
+  const lap = useSharedValue(0);
   useEffect(() => { base.set(withTiming(has ? W_FULL : W_EMPTY, motion.panel)); filled.set(withTiming(has ? 1 : 0, motion.release)); }, [has, base, filled]);
   useEffect(() => { shut.set(withTiming(open ? 1 : 0, motion.panel)); }, [open, shut]);
 
@@ -87,9 +129,12 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
         slot.set({ x: cx + W_FULL / 2 - PAD - 16 - DOT / 2, y: m.pageY + PILL_OUTER / 2 });
       }
       bob.set(withRepeat(withTiming(1, { duration: 520 }), -1, true));
+      lap.set(0);
+      lap.set(withRepeat(withTiming(1, { duration: RING_LAP, easing: Easing.linear }), -1, false));
     } else if (!on && was) {
       cancelAnimation(bob);
       bob.set(withTiming(0, motion.release));
+      cancelAnimation(lap);
     }
   });
 
@@ -100,8 +145,9 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
       transform: [{ scale: 1 + hot.value * 0.03 }],
     };
   });
-  const ring = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value), borderWidth: 1 + hot.value * 0.5 }));
+  const ring = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
   const active = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
+  const idleEdge = useAnimatedStyle(() => ({ opacity: 1 - ready.value * (1 - shut.value) }));
   const hint = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - filled.value) * (1 - shut.value) }));
   const deck = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * filled.value * (1 - shut.value) }));
   const chevrons = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value), transform: [{ translateY: bob.value * 3 }] }));
@@ -118,9 +164,15 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
         accessibilityLabel={open ? 'Close my deck' : has ? `Open my deck, ${cards.length} ${cards.length === 1 ? 'task' : 'tasks'}` : 'My deck. Drag a task here to take it'}
       >
         <Animated.View ref={ref} style={[s.wrap, wrap]}>
-          <Animated.View style={[s.ring, { borderColor: p.ring }, ring]} pointerEvents="none" />
-          <View style={[s.pill, { backgroundColor: p.fill, borderColor: p.dash }]}>
-            <Animated.View style={[s.fill, { backgroundColor: p.fillActive, borderColor: p.edge }, active]} />
+          <Animated.View style={[s.ring, ring]} pointerEvents="none">
+            <Svg width={W_FULL} height={PILL_OUTER}>
+              {RING_DASHES.map((len) => <RingDash key={len} len={len} lap={lap} hot={hot} color={p.ring} />)}
+            </Svg>
+          </Animated.View>
+          <View style={[s.pill, { backgroundColor: p.fill }]}>
+            <Animated.View style={[s.fill, { backgroundColor: p.fillActive }, active]} />
+            <Animated.View style={[s.edge, s.dashed, { borderColor: p.dash }, idleEdge]} pointerEvents="none" />
+            <Animated.View style={[s.edge, { borderColor: p.edge }, active]} pointerEvents="none" />
 
             <Animated.View style={[s.layer, hint]} pointerEvents="none">
               <Text style={s.text} color={p.ink} numberOfLines={1}>Drag a task here to take it</Text>
@@ -162,14 +214,13 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
 const useStyles = makeStyles(() => ({
   row: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   wrap: { height: PILL_OUTER, padding: PAD, borderRadius: 40 },
-  ring: { ...StyleSheet.absoluteFill, borderRadius: 40 },
+  ring: { position: 'absolute', top: 0, left: 0, width: W_FULL, height: PILL_OUTER },
   // Figma 223:21961: 90% #F4F4F4, 1.5 dashed #DADADA, shadow 0 3 5 4%.
-  pill: {
-    flex: 1, height: H, borderRadius: 40, borderWidth: 1.5, borderStyle: 'dashed', overflow: 'hidden',
-    boxShadow: '0px 3px 5px rgba(0,0,0,0.04)',
-  },
-  // While a card is carried (223:21834): a solid white stroke over a slightly darker fill.
-  fill: { position: 'absolute', top: -1.5, left: -1.5, right: -1.5, bottom: -1.5, borderRadius: 40, borderWidth: 1.5 },
+  pill: { flex: 1, height: H, borderRadius: 40, boxShadow: '0px 3px 5px rgba(0,0,0,0.04)' },
+  // While a card is carried (223:21834): a slightly darker fill and a solid white stroke.
+  fill: { ...StyleSheet.absoluteFill, borderRadius: 40 },
+  edge: { ...StyleSheet.absoluteFill, borderRadius: 40, borderWidth: 1.5 },
+  dashed: { borderStyle: 'dashed' },
   layer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   split: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14.5 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
