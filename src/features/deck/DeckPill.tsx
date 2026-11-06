@@ -18,7 +18,7 @@ import Animated, {
 
 import { motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
-import { ArrowUpIcon, ChevronsDownIcon, CloseIcon } from '@/ui/DeckIcons';
+import { ArrowUpIcon, ChevronsDownIcon } from '@/ui/DeckIcons';
 import { Text } from '@/ui/Text';
 import { ToneDot } from '@/ui/ToneDot';
 
@@ -27,11 +27,13 @@ import { assignDots } from './dots';
 import type { Card } from './model';
 
 // Figma "ui update 2": the pill is 48 tall inside a 3 padding ring; 233 wide with the hint,
-// 270 with tasks or while a card is carried, a 48 circle (close) while the list is open.
+// 270 with tasks or while a card is carried, and "Go back to Table" while the list is open.
 const H = 48;
 const PAD = 3;
 const W_EMPTY = 233;
 const W_FULL = 270;
+/** While the list is open: "(down arrow) Go back to Table", sized to its words. */
+const W_OPEN = 184;
 const DOT = 32;
 /** Space between the pill and the nav (Figma: pill 650-704, nav top 728). */
 export const PILL_ABOVE_NAV = 24;
@@ -100,7 +102,7 @@ const pop = () => {
 /**
  * My Deck as a small pill under the Table (Figma 239:23498, notes 239:23499): "Drag a task here
  * to take it" when empty, the deck's colors when not, and while a card is carried it widens,
- * a green ring runs round it and it points down. Tap it to open the list; it then turns into the list's close button.
+ * a green ring runs round it and it points down. Tap it to open the list; it then turns into "Go back to Table".
  */
 export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot }: Props) {
   const t = useTheme();
@@ -139,7 +141,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const wrap = useAnimatedStyle(() => {
     const w = interpolate(ready.value, [0, 1], [base.value, W_FULL]);
     return {
-      width: interpolate(shut.value, [0, 1], [w, PILL_OUTER]),
+      width: interpolate(shut.value, [0, 1], [w, W_OPEN]),
       transform: [{ scale: 1 + hot.value * 0.03 }],
     };
   });
@@ -160,7 +162,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
-        accessibilityLabel={open ? 'Close my deck' : has ? `Open my deck, ${cards.length} ${cards.length === 1 ? 'task' : 'tasks'}` : 'My deck. Drag a task here to take it'}
+        accessibilityLabel={open ? 'Go back to Table' : has ? `Open my deck, ${cards.length} ${cards.length === 1 ? 'task' : 'tasks'}` : 'My deck. Drag a task here to take it'}
       >
         <Animated.View ref={ref} style={[s.wrap, wrap]}>
           <Animated.View style={[s.ring, ring]} pointerEvents="none">
@@ -200,8 +202,9 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
               <ChevronsDownIcon color={p.icon} />
             </Animated.View>
 
-            <Animated.View style={[s.layer, close]} pointerEvents="none">
-              <CloseIcon color={p.icon} />
+            <Animated.View style={[s.layer, s.label, close]} pointerEvents="none">
+              <View style={s.down}><ArrowUpIcon color={p.ink} /></View>
+              <Text style={s.text} color={p.ink} numberOfLines={1}>Go back to Table</Text>
             </Animated.View>
           </View>
         </Animated.View>
@@ -223,6 +226,7 @@ const useStyles = makeStyles(() => ({
   layer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   split: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14.5 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  down: { transform: [{ rotate: '180deg' }] },
   text: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 19 },
   dots: { flexDirection: 'row', alignItems: 'center' },
   overlap: { marginLeft: -8 },
