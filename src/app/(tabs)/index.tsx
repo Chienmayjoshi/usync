@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -41,6 +42,9 @@ export default function TableScreen() {
   const slot = useSharedValue({ x: 0, y: 0 });
   const trayReady = useSharedValue(0);
   const hot = useSharedValue(0);
+  // My Deck is a peek from the Table, not a place: leaving the tab closes it, so coming back
+  // always lands on the stack. Closed instantly, as the screen is out of sight by then.
+  useFocusEffect(useCallback(() => () => { open.set(0); setExpanded(false); }, [open]));
   const toggle = () => {
     open.set(withTiming(expanded ? 0 : 1, motion.panel));
     setExpanded(!expanded);
