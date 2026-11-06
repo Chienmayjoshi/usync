@@ -11,6 +11,8 @@ import { Text } from './Text';
 
 export type ToastSpec = {
   kind: 'info' | 'thanks';
+  /** Drawn before the text, e.g. the partner's mascot on a nudge. */
+  lead?: ReactNode;
   title: string;
   body?: string;
   action?: { label: string; onPress: () => void };
@@ -48,7 +50,7 @@ export function ToastHost({ children }: { children: ReactNode }) {
       {toast && (
         <Animated.View key={toast.id} entering={FadeInUp.duration(220).easing(ease.out)} exiting={FadeOutUp.duration(160)} style={[s.wrap, { top: insets.top + 8 }]} pointerEvents="box-none">
           <View style={s.face}>
-            {thanks && <Heart size={22} color={t.color.accent.heart} weight="fill" />}
+            {toast.lead ?? (thanks && <Heart size={22} color={t.color.accent.heart} weight="fill" />)}
             <View style={s.copy}>
               <Text variant="label/md" color={thanks ? t.color.accent.heart : t.color.text.secondary}>{toast.title}</Text>
               {!!toast.body && <Text variant="body/md">{toast.body}</Text>}

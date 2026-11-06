@@ -86,6 +86,7 @@ function Routes() {
       <Stack.Protected guard={paired}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="mascot" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         <Stack.Screen name="activity" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       </Stack.Protected>
     </Stack>

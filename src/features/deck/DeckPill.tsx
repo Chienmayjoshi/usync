@@ -16,6 +16,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { type Mood } from '@/features/mascot/lines';
+import { Mascot } from '@/features/mascot/Mascot';
+import type { MascotRecipe } from '@/features/mascot/recipe';
 import { motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { ArrowUpIcon, ChevronsDownIcon } from '@/ui/DeckIcons';
@@ -89,6 +92,8 @@ type Props = {
   slot: SharedValue<{ x: number; y: number }>;
   ready: SharedValue<number>;
   hot: SharedValue<number>;
+  /** The partner's mascot peeking over the pill while something in the deck waits too long. */
+  peek?: { recipe: MascotRecipe | null; mood: Mood; bg: string };
 };
 
 const pop = () => {
@@ -104,7 +109,7 @@ const pop = () => {
  * to take it" when empty, the deck's colors when not, and while a card is carried it widens,
  * a green ring runs round it and it points down. Tap it to open the list; it then turns into "Go back to Table".
  */
-export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot }: Props) {
+export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot, peek }: Props) {
   const t = useTheme();
   const s = useStyles();
   const p = t.color.pill;
@@ -153,6 +158,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const drop = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
   const chevrons = useAnimatedStyle(() => ({ transform: [{ translateY: bob.value * 3 }] }));
   const close = useAnimatedStyle(() => ({ opacity: shut.value }));
+  const peeking = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - shut.value), transform: [{ translateY: ready.value * 8 }] }));
 
   const dots = assignDots(cards);
   const shown = cards.slice(0, 3);
@@ -166,6 +172,11 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
         accessibilityLabel={open ? 'Go back to Table' : has ? `Open my deck, ${cards.length} ${cards.length === 1 ? 'task' : 'tasks'}` : 'My deck. Drag a task here to take it'}
       >
         <Animated.View ref={ref} style={[s.wrap, wrap]}>
+          {peek && (
+            <Animated.View style={[s.peek, peeking]} pointerEvents="none">
+              <Mascot recipe={peek.recipe} mood={peek.mood} size={28} bg={peek.bg} />
+            </Animated.View>
+          )}
           <Animated.View style={[s.ring, ring]} pointerEvents="none">
             <Svg width={W_FULL} height={PILL_OUTER}>
               {RING_DASHES.map((len) => <RingDash key={len} len={len} lap={lap} hot={hot} color={p.ring} />)}
@@ -219,6 +230,8 @@ const useStyles = makeStyles(() => ({
   row: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   wrap: { height: PILL_OUTER, padding: PAD, borderRadius: 40 },
   ring: { position: 'absolute', top: 0, left: 0, width: W_FULL, height: PILL_OUTER },
+  // Peeks over the pill's top edge, beside the dots.
+  peek: { position: 'absolute', top: -20, left: 20, zIndex: 2, borderRadius: 16, borderWidth: 2, borderColor: '#FFFFFF' },
   // Figma 223:21961: 90% #F4F4F4, 1.5 dashed #DADADA, shadow 0 3 5 4%.
   pill: { flex: 1, height: H, borderRadius: 40, boxShadow: '0px 3px 5px rgba(0,0,0,0.04)' },
   // While a card is carried (223:21834): a slightly darker fill and a solid white stroke.

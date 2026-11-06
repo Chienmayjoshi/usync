@@ -5,6 +5,9 @@ import Svg, { Circle } from 'react-native-svg';
 import { useNames } from '@/features/account/account';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import type { PersonColor, Tone } from '@/theme/tokens';
+import { type Mood } from '@/features/mascot/lines';
+import { Mascot } from '@/features/mascot/Mascot';
+import type { MascotRecipe } from '@/features/mascot/recipe';
 import { Avatar } from '@/ui/AvatarPair';
 import { Blobs } from '@/ui/Glow';
 import { PopButton } from '@/ui/PopButton';
@@ -44,10 +47,14 @@ type Props = {
   minHeight?: number;
   /** Off when the stack draws the shadow itself, so it can fade as the card moves back. */
   shadow?: boolean;
+  /** The partner's mascot, peeking over the card when it has sat too long, with its line. */
+  nudge?: CardNudge;
 };
 
+export type CardNudge = { mood: Mood; line: string; recipe: MascotRecipe | null; bg: string };
+
 /** A deck card: the job on the front; its story (or the delete question) on the back. */
-export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = CARD_H, shadow = true }: Props) {
+export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = CARD_H, shadow = true, nudge }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -66,6 +73,7 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
   const answerLabels = card.request === 'take' ? ['Not this one', 'Take it'] : card.request === 'together' ? ['Not now', 'Yes, together'] : ['Keep it', 'Give it'];
 
   const front = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }] }));
+  const peek = useAnimatedStyle(() => ({ opacity: 1 - Math.min(1, flip.value * 2) }));
   const rear = useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }] }));
 
   return (
@@ -102,6 +110,11 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
         ) : (
           <Text variant="body/md" color={CARD_INK}>{meta}</Text>
         )}
+        {nudge && (
+          <View style={s.nudge}>
+            <Text style={s.nudgeText} numberOfLines={2}>{nudge.line}</Text>
+          </View>
+        )}
         {asking && answers && (
           <View style={s.answers}>
             <PopButton label={answerLabels[0]} tone="negative" fill onPress={answers.onDecline} />
@@ -110,6 +123,12 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
         )}
         {footer}
       </Animated.View>
+
+      {nudge && (
+        <Animated.View style={[s.peek, peek]} pointerEvents="none">
+          <Mascot recipe={nudge.recipe} mood={nudge.mood} size={44} bg={nudge.bg} />
+        </Animated.View>
+      )}
 
       <Animated.View style={[s.face, s.back, !shadow && s.flat, s.hidden, rear]}>
         {back === 'delete' ? (
@@ -171,6 +190,10 @@ const useStyles = makeStyles((t) => ({
     paddingTop: 40, paddingHorizontal: 24, paddingBottom: 24, gap: 16, overflow: 'hidden', boxShadow: t.shadow.deal,
   },
   title: { lineHeight: 40 },
+  // The partner's mascot peeks over the top right edge; its line sits in a white bubble.
+  peek: { position: 'absolute', top: -26, right: 28, zIndex: 3, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF' },
+  nudge: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 14, borderTopLeftRadius: 4, paddingHorizontal: 12, paddingVertical: 7, maxWidth: '100%' },
+  nudgeText: { fontFamily: 'Satoshi-Medium', fontSize: 13, lineHeight: 18, color: '#1A1A1A' },
   hidden: { backfaceVisibility: 'hidden' },
   flat: { boxShadow: [] },
   back: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },

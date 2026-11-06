@@ -6,6 +6,9 @@ import { useNames } from '@/features/account/account';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { FilterChips } from '@/ui/FilterChips';
 
+import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
+import { useNow } from '@/features/mascot/useNow';
+
 import type { CardAnswers } from './DealCard';
 import type { Card } from './model';
 import { SwipeRow } from './SwipeRow';
@@ -39,6 +42,17 @@ export function DeckList({ cards, onDone, onLater, onOpen, answer, empty, bottom
   const together = cards.filter((c) => c.owner === 'together');
   const shown = tab === 'mine' ? mine : together;
   const f = t.color.fade;
+  const now = useNow();
+  // A card sitting too long speaks in the partner's mascot's voice (0007's nudges, mirrored).
+  const nudgeFor = (c: Card) => {
+    const kind = nudgeKind(c);
+    const level = kind ? nudgeLevel(c, now, names.nudgeMax) : 0;
+    if (!kind || !level) return undefined;
+    return {
+      mood: MOOD_FOR[level], line: lineFor(c, kind, level, names.voices.partner, now, true),
+      recipe: names.mascots.partner, bg: t.tones[names.colors.partner].glow[0], ink: t.tones[names.colors.partner].ink,
+    };
+  };
 
   const labels = (c: Card): [string, string] => (c.request === 'take' ? ['Not this one', 'Take it'] : c.request === 'together' ? ['Not now', 'Yes'] : ['Keep it', 'Give it']);
 
@@ -65,6 +79,7 @@ export function DeckList({ cards, onDone, onLater, onOpen, answer, empty, bottom
                 onLater={c.owner === 'together' ? undefined : () => onLater(c)}
                 answers={answers}
                 answerLabels={answers ? labels(c) : undefined}
+                nudge={nudgeFor(c)}
               />
             );
           })}

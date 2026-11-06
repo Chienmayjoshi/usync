@@ -6,6 +6,9 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { haptics } from '@/theme/haptics';
 import { ease, motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { type Mood } from '@/features/mascot/lines';
+import { Mascot } from '@/features/mascot/Mascot';
+import type { MascotRecipe } from '@/features/mascot/recipe';
 import { bucketSticker } from '@/ui/DeckIcons';
 import { PopButton } from '@/ui/PopButton';
 import { Text } from '@/ui/Text';
@@ -29,10 +32,12 @@ type Props = {
   onOpen: () => void;
   answers?: CardAnswers;
   answerLabels?: [string, string];
+  /** The partner's mascot, when this card has sat long enough to be nudged. */
+  nudge?: { mood: Mood; line: string; recipe: MascotRecipe | null; bg: string; ink: string };
 };
 
 /** A My Deck row: swipe right for DONE, left for LATER (back to the table). Tap for its story. */
-export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels }: Props) {
+export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge }: Props) {
   const t = useTheme();
   const s = useStyles();
   const tx = useSharedValue(0);
@@ -111,8 +116,11 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
               </View>
               <View style={s.copy}>
                 <Text style={s.title} color={t.color.text.primary} numberOfLines={1}>{card.title}</Text>
-                <Text style={s.meta} color={t.color.text.secondary} numberOfLines={1}>{meta}</Text>
+                {nudge
+                  ? <Text style={s.meta} color={nudge.ink} numberOfLines={1}>{nudge.line}</Text>
+                  : <Text style={s.meta} color={t.color.text.secondary} numberOfLines={1}>{meta}</Text>}
               </View>
+              {nudge && !answers && <Mascot recipe={nudge.recipe} mood={nudge.mood} size={28} bg={nudge.bg} />}
               {answers && answerLabels && (
                 <View style={s.answers}>
                   <PopButton label={answerLabels[0]} tone="ghost" small onPress={answers.onDecline} />

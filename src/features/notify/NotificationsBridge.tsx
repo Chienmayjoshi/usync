@@ -4,9 +4,12 @@ import { type Href, router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { useAccount } from '@/features/account/account';
+import { useAccount, useNames } from '@/features/account/account';
+import { MOOD_FOR, type NudgeLevel } from '@/features/mascot/lines';
+import { Mascot } from '@/features/mascot/Mascot';
 import { type PushKind, registerForPush } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/theme/ThemeProvider';
 import { useToast } from '@/ui/Toast';
 
 const SEEN = 'usync.banners.seenAt';
@@ -24,6 +27,13 @@ export function NotificationsBridge() {
   const toast = useToast();
   const paired = !!me?.couple_id;
   const hasPush = useRef(false);
+  const t = useTheme();
+  const names = useNames();
+  // The partner's mascot, kept current for the notification listener (which is set up once).
+  const mascotRef = useRef({ recipe: names.mascots.partner, bg: t.tones[names.colors.partner].glow[0] });
+  useEffect(() => {
+    mascotRef.current = { recipe: names.mascots.partner, bg: t.tones[names.colors.partner].glow[0] };
+  }, [names.mascots.partner, names.colors.partner, t]);
 
   useEffect(() => {
     if (!paired) return;
@@ -41,7 +51,11 @@ export function NotificationsBridge() {
       const kind = n.request.content.data?.kind;
       // Hearts, drops and finished jobs already arrive live through the deck's realtime channel.
       if (kind === 'thanks' || kind === 'drop' || kind === 'done') return;
-      toast({ kind: 'info', title: n.request.content.title ?? 'usync', body: n.request.content.body ?? undefined, ms: 6000 });
+      const level = Number(n.request.content.data?.level ?? 0);
+      const lead = kind === 'nudge'
+        ? <Mascot recipe={mascotRef.current.recipe} mood={MOOD_FOR[(Math.min(3, Math.max(0, level)) as NudgeLevel)]} size={40} bg={mascotRef.current.bg} />
+        : undefined;
+      toast({ kind: 'info', lead, title: n.request.content.title ?? 'usync', body: n.request.content.body ?? undefined, ms: 6000 });
     });
     return () => sub.remove();
   }, [toast]);

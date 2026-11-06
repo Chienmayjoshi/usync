@@ -12,6 +12,9 @@ import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
 import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
+import { MOOD_FOR, nudgeLevel } from '@/features/mascot/lines';
+import { useMascotPrompt } from '@/features/mascot/useMascotPrompt';
+import { useNow } from '@/features/mascot/useNow';
 import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
@@ -33,6 +36,7 @@ export default function TableScreen() {
   const { partner, inviteCode } = useAccount();
   const names = useNames();
   const move = useMoves();
+  useMascotPrompt();
   const [updating, setUpdating] = useState<Card | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [tableWhen, setTableWhen] = useState<When>('all');
@@ -62,6 +66,10 @@ export default function TableScreen() {
 
   const counts = (cards: Card[]) => ({ all: cards.length, week: byWhen(cards, 'week').length, later: byWhen(cards, 'later').length });
   const tc = counts(table);
+  const now = useNow();
+  // The most ignored card in my deck decides how the partner's mascot looks, peeking over the pill.
+  const deckLevel = deck.reduce<number>((m, c) => Math.max(m, nudgeLevel(c, now, names.nudgeMax)), 0) as 0 | 1 | 2 | 3;
+  const peek = deckLevel ? { recipe: names.mascots.partner, mood: MOOD_FOR[deckLevel], bg: t.tones[names.colors.partner].glow[0] } : undefined;
 
   const tableFade = useAnimatedStyle(() => ({ opacity: 1 - open.value, transform: [{ translateY: -open.value * 12 }] }));
   const listIn = useAnimatedStyle(() => ({ opacity: open.value, transform: [{ translateY: (1 - open.value) * 16 }] }));
@@ -125,7 +133,7 @@ export default function TableScreen() {
         </Animated.View>
       )}
 
-      {!solo && <DeckPill cards={deck} open={expanded} onToggle={toggle} bottom={pillBottom} rect={rect} slot={slot} ready={trayReady} hot={hot} />}
+      {!solo && <DeckPill cards={deck} open={expanded} onToggle={toggle} bottom={pillBottom} rect={rect} slot={slot} ready={trayReady} hot={hot} peek={peek} />}
 
       {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </View>

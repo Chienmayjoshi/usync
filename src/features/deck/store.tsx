@@ -45,7 +45,7 @@ function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string):
     id: r.id, title: r.title, bucket: r.bucket, effort: r.effort, when: r.when_text, detail: r.detail,
     owner: ownerFor(r, side), status: r.status, traded: r.traded, weight: r.weight, story: story.get(r.id) ?? [],
     doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at, waitingNote: r.waiting_note,
-    droppedBy: r.dropped_by ? (r.dropped_by === myId ? 'me' : 'partner') : null, createdAt: r.created_at,
+    droppedBy: r.dropped_by ? (r.dropped_by === myId ? 'me' : 'partner') : null, createdAt: r.created_at, sortAt: r.sort_at,
     request: r.request ?? null, requestedBy: r.requested_by ? (r.requested_by === myId ? 'me' : 'partner') : null, surprise: !!r.surprise,
   }));
   const album: StoryCard[] = rows

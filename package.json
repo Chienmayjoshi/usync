@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@dicebear/core": "9",
+    "@dicebear/open-peeps": "9",
     "@expo-google-fonts/archivo-black": "^0.4.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.118.0",
@@ -55,6 +57,11 @@
     "preset": "jest-expo",
     "testMatch": [
       "<rootDir>/src/**/*.test.ts"
+    ],
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@dicebear))",
+      "/node_modules/react-native-reanimated/plugin/",
+      "/node_modules/@react-native/babel-preset/"
     ]
   }
 }

@@ -29,6 +29,8 @@ export type Card = {
   waitingNote?: string | null;
   droppedBy?: 'me' | 'partner' | null;
   createdAt?: string;
+  /** When it last moved (taken, put back, resumed): how long it has sat, for nudges. */
+  sortAt?: string;
   /** An open question about this card, and who asked it. */
   request?: Request | null;
   requestedBy?: 'me' | 'partner' | null;

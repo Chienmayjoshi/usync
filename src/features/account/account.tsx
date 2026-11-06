@@ -1,11 +1,12 @@
 import type { Session } from '@supabase/supabase-js';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import type { MascotRecipe } from '@/features/mascot/recipe';
 import { forgetPush } from '@/lib/notifications';
 import { type MemberRow, supabase } from '@/lib/supabase';
 import { type PersonColor, personFace } from '@/theme/tokens';
 
-export type Profile = { name: string; color: PersonColor; avatar: string | null };
+export type Profile = { name: string; color: PersonColor; avatar: string | null; mascot: MascotRecipe | null; voice: 'he' | 'she' | 'neutral'; nudge_max: number };
 
 type Account = {
   /** undefined while the stored session loads. */
@@ -40,7 +41,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!uid) return;
-    const { data, error } = await supabase.from('members').select('id, couple_id, side, name, color, avatar');
+    const { data, error } = await supabase.from('members').select('id, couple_id, side, name, color, avatar, mascot, voice, nudge_max');
     if (error) throw error;
     setMembers(data as MemberRow[]);
     const mine = (data as MemberRow[]).find((m) => m.id === uid);
@@ -143,5 +144,9 @@ export function useNames() {
     avatars: { a: me?.avatar ?? null, b: partner?.avatar ?? null },
     colors: { me: mine, partner: partnerColorFor(mine, partner?.color) },
     hex: { me: personFace(mine), partner: personFace(partnerColorFor(mine, partner?.color)) },
+    /** The mascots (null until built: the generic one stands in), their voices, and my nudge cap. */
+    mascots: { me: me?.mascot ?? null, partner: partner?.mascot ?? null },
+    voices: { me: me?.voice ?? 'neutral', partner: partner?.voice ?? 'neutral' },
+    nudgeMax: me?.nudge_max ?? 2,
   };
 }

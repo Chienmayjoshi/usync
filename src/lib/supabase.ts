@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState, Platform } from 'react-native';
 
+import type { MascotRecipe } from '@/features/mascot/recipe';
 import type { PersonColor } from '@/theme/tokens';
 
 // The publishable key is meant to ship inside the app; row level security protects the data.
@@ -22,7 +23,11 @@ if (Platform.OS !== 'web') {
 
 export type Side = 'a' | 'b';
 
-export type MemberRow = { id: string; couple_id: string | null; side: Side | null; name: string; color: PersonColor; avatar: string | null };
+export type MemberRow = {
+  id: string; couple_id: string | null; side: Side | null; name: string; color: PersonColor; avatar: string | null;
+  /** Their mascot (Open Peeps recipe), its voice, and how firm nudges to them may get (0007). */
+  mascot?: MascotRecipe | null; voice?: 'he' | 'she' | 'neutral'; nudge_max?: number;
+};
 
 export type TaskRow = {
   id: string;

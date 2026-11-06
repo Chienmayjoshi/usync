@@ -31,7 +31,10 @@ import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Blobs } from '@/ui/Glow';
 import { Text } from '@/ui/Text';
 
-import { type CardAnswers, DealCard, toneFor } from './DealCard';
+import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
+import { useNow } from '@/features/mascot/useNow';
+
+import { type CardAnswers, type CardNudge, DealCard, toneFor } from './DealCard';
 import { type Card, forMe } from './model';
 
 export type Dir = 'left' | 'right';
@@ -179,6 +182,17 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const [topH, setTopHState] = useState(300);
   const [stackW, setStackW] = useState(350);
   const setTopH = (h: number) => { setTopHState(h); topHV.set(h); };
+
+  // The front card, if it has sat long enough, carries the partner's mascot and its line.
+  const t = useTheme();
+  const names = useNames();
+  const now = useNow();
+  const topKind = top ? nudgeKind(top) : null;
+  const topLevel = top && topKind ? nudgeLevel(top, now, names.nudgeMax) : 0;
+  const topNudge: CardNudge | undefined = top && topKind && topLevel ? {
+    mood: MOOD_FOR[topLevel], line: lineFor(top, topKind, topLevel, names.voices.partner, now, true),
+    recipe: names.mascots.partner, bg: t.tones[names.colors.partner].glow[0],
+  } : undefined;
 
   const actionsNow = top && top.request && forMe(top) ? {} : actions;
   const dropNow = top && !forMe(top) ? drop : undefined;
@@ -491,6 +505,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
               onCancelDelete={front ? closeDelete : undefined}
               onHeight={front ? setTopH : undefined}
               stamps={front ? actionsNow : undefined}
+              nudge={front ? topNudge : undefined}
             />
           );
         })}
@@ -577,10 +592,11 @@ type LayerProps = {
   onCancelDelete?: () => void;
   onHeight?: (h: number) => void;
   stamps?: Partial<Record<Dir, SwipeAction>>;
+  nudge?: CardNudge;
 };
 
 /** One card on the strip. Its place in the stack is pos - head; the front one also follows the finger. */
-function Layer({ pos, card, head, count, surface, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps }: LayerProps) {
+function Layer({ pos, card, head, count, surface, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps, nudge }: LayerProps) {
   const t = useTheme();
   const s = useStyles();
   const shades = t.color.stack[surface];
@@ -649,6 +665,7 @@ function Layer({ pos, card, head, count, surface, hand, back, answers, footer, o
         onUpdate={onUpdate}
         onDelete={onDelete}
         onCancelDelete={onCancelDelete}
+        nudge={nudge}
       />
       <Animated.View style={[s.shade, shade]} pointerEvents="none" />
       {stamps?.right && (
