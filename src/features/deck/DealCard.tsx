@@ -15,6 +15,9 @@ import { type Card, forMe, isQuick } from './model';
 /** Figma card: 350 x 300. */
 export const CARD_H = 300;
 
+/** Text on the full color face (Figma: white). */
+const CARD_INK = '#FFFFFF';
+
 export type People = { me: PersonColor; partner: PersonColor };
 
 /** Whose color a card glows in: the owner's, or for the Table, whoever added it. */
@@ -67,12 +70,13 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
 
   return (
     <View>
-      <Animated.View style={[s.face, { minHeight }, !shadow && s.flat, s.hidden, front]}>
+      <Animated.View style={[s.face, { minHeight, backgroundColor: tone.card }, !shadow && s.flat, s.hidden, front]}>
+        {/* Figma 223:21707-8: a 152 light top left and a 332 x 334 light top right, both blurred. */}
         <Blobs
-          opacity={t.scheme === 'light' ? 0.8 : undefined}
+          opacity={1}
           blobs={[
-            { x: -12, y: -46, size: 152, blur: 84, color: tone.glow[0] },
-            { x: 178, y: -46, size: 152, blur: 84, color: tone.glow[1] },
+            { x: -13.5, y: -47.5, size: 152, blur: 0, sigma: 72, color: tone.cardGlow[0] },
+            { x: 86.5, y: -138.87, size: 333, blur: 0, sigma: 140, color: tone.cardGlow[1] },
           ]}
         />
         {card.surprise && <Rings />}
@@ -88,15 +92,15 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
           </View>
           {tag && (
             <View style={s.tag}>
-              <Text variant="display/sm" color={t.color.accent.tag} numberOfLines={1}>{tag}</Text>
+              <Text style={s.tagText} numberOfLines={1}>{tag}</Text>
             </View>
           )}
         </View>
-        <Text variant="display/xl" color={t.color.text.primary}>{card.title}</Text>
+        <Text variant="display/xl" color={CARD_INK} style={s.title}>{card.title}</Text>
         {card.status === 'waiting' ? (
-          <View style={s.waiting}><Text variant="label/md" color={t.color.text.secondary}>Waiting on someone else</Text></View>
+          <View style={s.waiting}><Text variant="label/md" color={CARD_INK}>Waiting on someone else</Text></View>
         ) : (
-          <Text variant="body/md" color={t.color.text.secondary}>{meta}</Text>
+          <Text variant="body/md" color={CARD_INK}>{meta}</Text>
         )}
         {asking && answers && (
           <View style={s.answers}>
@@ -161,21 +165,25 @@ function Rings() {
 }
 
 const useStyles = makeStyles((t) => ({
+  // Figma 223:21706: full color, 1.5 white stroke, a soft 0 4 12 shadow. The back face stays plain.
   face: {
-    backgroundColor: t.color.bg.raised, borderRadius: 24, borderWidth: 2, borderColor: t.color.border.card,
-    paddingTop: 40, paddingHorizontal: 24, paddingBottom: 24, gap: 16, overflow: 'hidden', boxShadow: t.shadow.float,
+    backgroundColor: t.color.bg.raised, borderRadius: 24, borderWidth: 1.5, borderColor: t.color.border.card,
+    paddingTop: 40, paddingHorizontal: 24, paddingBottom: 24, gap: 16, overflow: 'hidden', boxShadow: t.shadow.deal,
   },
+  title: { lineHeight: 40 },
   hidden: { backfaceVisibility: 'hidden' },
   flat: { boxShadow: [] },
   back: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   people: { flexDirection: 'row' },
   overlap: { marginLeft: -8 },
+  // Figma 223:21713: a white pill with a #EFEFEF hairline, Satoshi Black 12 caps.
   tag: {
-    backgroundColor: t.scheme === 'light' ? '#FFFFFF' : 'rgba(0,0,0,0.4)', borderRadius: 40, borderWidth: 1, borderColor: t.color.border.subtle,
+    backgroundColor: '#FFFFFF', borderRadius: 40, borderWidth: 1, borderColor: '#EFEFEF',
     paddingHorizontal: 12, paddingVertical: 4, flexShrink: 1,
   },
-  waiting: { alignSelf: 'flex-start', backgroundColor: t.color.bg.sunken, borderRadius: t.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
+  tagText: { fontFamily: 'Satoshi-Black', fontSize: 12, lineHeight: 16, color: '#1A1A1A', textTransform: 'uppercase' },
+  waiting: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.24)', borderRadius: t.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   answers: { flexDirection: 'row', gap: 12, marginTop: 8 },
   updatePill: { backgroundColor: t.color.action.neutral, borderRadius: t.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   spacer: { flex: 1, minHeight: 8 },

@@ -1,26 +1,28 @@
 import { useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
-import Animated, { FadeIn, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAvatars, shareInvite } from '@/features/account/HeaderAvatars';
 import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
+import { DeckList } from '@/features/deck/DeckList';
+import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
 import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
-import { DeckDrawer } from '@/features/deck/DeckDrawer';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
+import { haptics } from '@/theme/haptics';
+import { motion } from '@/theme/motion';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { FilterChips } from '@/ui/FilterChips';
-import { navBottom } from '@/ui/TabBar';
+import { navBottom, NAV_H } from '@/ui/TabBar';
 import { Text } from '@/ui/Text';
 
 /**
- * The Table: everything nobody has claimed yet, as a stack. Drag a card down into My Deck to
- * take it (press, then drag), swipe up and down through the stack, right to do it together, left
- * to ask your partner.
- * My Deck rises from the bottom to show what you carry.
+ * The Table: everything nobody has claimed yet, as a stack. Press a card, then drag it down to the
+ * My Deck pill to take it (it turns into a circle on the way); swipe up and down through the stack,
+ * right to do it together, left to ask your partner. Tap the pill to see My Deck as a list.
  */
 export default function TableScreen() {
   const t = useTheme();
@@ -33,11 +35,16 @@ export default function TableScreen() {
   const [updating, setUpdating] = useState<Card | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [tableWhen, setTableWhen] = useState<When>('all');
-  const [deckWhen, setDeckWhen] = useState<When>('all');
   const open = useSharedValue(0);
   const rect = useSharedValue<Rect>({ x: -1000, y: -1000, w: 0, h: 0 });
+  const slot = useSharedValue({ x: 0, y: 0 });
   const trayReady = useSharedValue(0);
   const hot = useSharedValue(0);
+  const toggle = () => {
+    open.set(withTiming(expanded ? 0 : 1, motion.panel));
+    setExpanded(!expanded);
+    haptics.tick();
+  };
 
   // Until a partner joins there is no one to share with: your deck and the table are one stack,
   // and the My Deck drawer stays away (Figma 212:21257).
@@ -45,19 +52,19 @@ export default function TableScreen() {
   const table = solo ? [...deckCards(state), ...tableCards(state)] : tableCards(state);
   const deck = deckCards(state);
   const tableShown = byWhen(table, tableWhen);
-  const deckShown = byWhen(deck, deckWhen);
   const headerTop = insets.top + 18;
+  const pillBottom = navBottom(insets.bottom) + NAV_H + PILL_ABOVE_NAV;
   const them = names.partnerOr;
 
   const counts = (cards: Card[]) => ({ all: cards.length, week: byWhen(cards, 'week').length, later: byWhen(cards, 'later').length });
   const tc = counts(table);
-  const dc = counts(deck);
 
-  const tableFade = useAnimatedStyle(() => ({ opacity: 1 - open.value * 0.6 }));
+  const tableFade = useAnimatedStyle(() => ({ opacity: 1 - open.value, transform: [{ translateY: -open.value * 12 }] }));
+  const listIn = useAnimatedStyle(() => ({ opacity: open.value, transform: [{ translateY: (1 - open.value) * 16 }] }));
 
   return (
     <View style={s.screen}>
-      {/* Figma: header row 68 tall at y=72 (18 under the status bar), chips 32 below it, the stack 20 below them. */}
+      {/* Figma: header row 68 tall at y=72 (18 under the status bar), chips at 164, the stack 32 below them. */}
       <View style={[s.header, { top: headerTop }]}>
         <Text variant="display/lg" style={s.flex}>{expanded ? 'My deck' : 'On table'}</Text>
         <HeaderAvatars />
@@ -65,7 +72,7 @@ export default function TableScreen() {
 
       {solo && inviteCode && <InviteStrip code={inviteCode} top={headerTop + 76} />}
 
-      <Animated.View style={[s.table, { top: headerTop + (solo ? 234 : 100) }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
+      <Animated.View style={[s.table, { top: headerTop + (solo ? 234 : 92) }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
         <FilterChips
           value={tableWhen}
           onChange={setTableWhen}
@@ -81,7 +88,7 @@ export default function TableScreen() {
               right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
               left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
             }}
-            drop={solo ? undefined : { rect, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
+            drop={solo ? undefined : { rect, slot, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
             onDelete={(c) => move(c, 'delete')}
             onUpdate={setUpdating}
           />
@@ -94,46 +101,27 @@ export default function TableScreen() {
         )}
       </Animated.View>
 
-      {!solo && <DeckDrawer
-        open={open}
-        expanded={expanded}
-        setExpanded={setExpanded}
-        openTop={headerTop + 88}
-        navBottom={navBottom(insets.bottom)}
-        cards={deck}
-        rect={rect}
-        ready={trayReady}
-        hot={hot}
-        chips={(
-          <FilterChips
-            value={deckWhen}
-            onChange={setDeckWhen}
-            variant="drawer"
-            glow={t.tones[names.colors.me].glow}
-            options={[{ value: 'all', label: 'My Tasks', count: dc.all }, { value: 'week', label: 'This week', count: dc.week }, { value: 'later', label: 'Later', count: dc.later }]}
-          />
-        )}
-      >
-        {deckShown.length ? (
-          <CardStack
-            cards={deckShown}
-            actions={{
-              right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
-              left: { label: 'Back to table', color: t.color.action.negative, run: (c) => move(c, 'table') },
-            }}
-            onDelete={(c) => move(c, 'delete')}
-            onUpdate={setUpdating}
-            surface="drawer"
+      {!solo && (
+        <Animated.View style={[s.list, { top: headerTop + 92 }, listIn]} pointerEvents={expanded ? 'box-none' : 'none'}>
+          <DeckList
+            cards={deck}
+            onDone={(c) => move(c, 'done')}
+            onLater={(c) => move(c, 'table')}
+            onOpen={setUpdating}
             answer={(c) => (forMe(c) ? { onAccept: () => move(c, 'accept'), onDecline: () => move(c, 'decline') } : undefined)}
+            bottomSpace={pillBottom + PILL_OUTER + 24}
+            empty={(
+              <Empty
+                image={require('@/../assets/illustrations/hand-cleared.png')}
+                title="Hand Cleared."
+                body={deck.length ? 'Nothing here yet.' : `Nothing on your deck.\n${table.length} ${table.length === 1 ? 'card is' : 'cards are'} still on the table.`}
+              />
+            )}
           />
-        ) : (
-          <Empty
-            image={require('@/../assets/illustrations/hand-cleared.png')}
-            title="Hand Cleared."
-            body={deck.length ? 'Nothing here for this filter.' : `Nothing on your deck.\n${table.length} ${table.length === 1 ? 'card is' : 'cards are'} still on the table.`}
-          />
-        )}
-      </DeckDrawer>}
+        </Animated.View>
+      )}
+
+      {!solo && <DeckPill cards={deck} open={expanded} onToggle={toggle} bottom={pillBottom} rect={rect} slot={slot} ready={trayReady} hot={hot} />}
 
       {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </View>
@@ -174,7 +162,9 @@ const useStyles = makeStyles((t) => ({
   screen: { flex: 1, backgroundColor: t.color.bg.canvas },
   header: { position: 'absolute', left: 20, right: 20, height: 68, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 6 },
   flex: { flex: 1 },
-  table: { position: 'absolute', left: 20, right: 20, gap: 20 },
+  // Above the pill, so a card carried down as a circle passes over it.
+  table: { position: 'absolute', left: 20, right: 20, gap: 32, zIndex: 3 },
+  list: { position: 'absolute', left: 20, right: 20, bottom: 0 },
   empty: { alignItems: 'center', gap: 10 },
   art: { width: 200, height: 220 },
   emptyTitle: { textTransform: 'none', fontSize: 26 },

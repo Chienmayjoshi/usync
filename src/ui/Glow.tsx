@@ -38,8 +38,43 @@ export function Glow({ colors, placement = 'top', opacity }: Props) {
   );
 }
 
-/** One of Figma's blurred ellipses: its box (x, y, size) in the parent's pixels, and its blur. */
-export type Blob = { x: number; y: number; size: number; blur: number; color: string };
+/**
+ * One of Figma's blurred ellipses: its box (x, y, size) in the parent's pixels, and its blur.
+ * With `sigma` (the SVG export's feGaussianBlur stdDeviation) the light is drawn as that exact
+ * blurred disc; without it, the older soft approximation spreading `blur` past the edge.
+ */
+export type Blob = { x: number; y: number; size: number; blur: number; color: string; sigma?: number };
+
+/** e^-x * I0(x), the scaled modified Bessel function: stays finite for large x. */
+function i0e(x: number) {
+  if (x < 15) {
+    let sum = 1;
+    let term = 1;
+    for (let k = 1; k < 40; k++) { term *= (x / 2) ** 2 / (k * k); sum += term; }
+    return sum * Math.exp(-x);
+  }
+  return (1 + 1 / (8 * x) + 9 / (128 * x * x)) / Math.sqrt(2 * Math.PI * x);
+}
+
+/** Intensity at distance d from the centre of a solid disc of radius r after a Gaussian blur of sigma s. */
+function blurredDisc(r: number, s: number, d: number) {
+  const steps = 48;
+  let sum = 0;
+  for (let i = 0; i < steps; i++) {
+    const rho = ((i + 0.5) / steps) * r;
+    sum += (rho / (s * s)) * Math.exp(-((d - rho) ** 2) / (2 * s * s)) * i0e((d * rho) / (s * s)) * (r / steps);
+  }
+  return Math.min(1, sum);
+}
+
+/** Gradient stops (offset 0..1 of radius r + 3 sigma) tracing the blurred disc's falloff. */
+function discStops(r: number, s: number) {
+  const R = r + 3 * s;
+  return Array.from({ length: 13 }, (_, i) => {
+    const f = i / 12;
+    return { offset: f, alpha: blurredDisc(r, s, f * R) };
+  });
+}
 
 /**
  * Figma's "ellipse + layer blur" drawn as a radial gradient. A Gaussian blur of radius b spreads
@@ -55,14 +90,15 @@ export function Blobs({ blobs, opacity }: { blobs: Blob[]; opacity?: number }) {
       <Defs>
         {blobs.map((b, i) => (
           <RadialGradient key={i} id={`g${id}${i}`} cx="50%" cy="50%" r="50%">
-            <Stop offset="0" stopColor={b.color} stopOpacity={o} />
-            <Stop offset={String(b.size / 2 / (b.size / 2 + b.blur) * 0.7)} stopColor={b.color} stopOpacity={o * 0.85} />
-            <Stop offset="1" stopColor={b.color} stopOpacity={0} />
+            {(b.sigma != null
+              ? discStops(b.size / 2, b.sigma)
+              : [{ offset: 0, alpha: 1 }, { offset: (b.size / 2 / (b.size / 2 + b.blur)) * 0.7, alpha: 0.85 }, { offset: 1, alpha: 0 }]
+            ).map((st) => <Stop key={st.offset} offset={String(st.offset)} stopColor={b.color} stopOpacity={o * st.alpha} />)}
           </RadialGradient>
         ))}
       </Defs>
       {blobs.map((b, i) => {
-        const r = b.size / 2 + b.blur;
+        const r = b.size / 2 + (b.sigma != null ? 3 * b.sigma : b.blur);
         return <Ellipse key={i} cx={b.x + b.size / 2} cy={b.y + b.size / 2} rx={r} ry={r} fill={`url(#g${id}${i})`} />;
       })}
     </Svg>

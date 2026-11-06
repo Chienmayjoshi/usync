@@ -17,6 +17,12 @@ export type ToneSpec = {
   ink: string;
   /** The two soft lights that glow behind a card (Figma: two blurred ellipses). */
   glow: readonly [string, string];
+  /** Full color card face (Figma "ui update 2": rose #E45794, lagoon #32C8B1; the rest follow the same rule). */
+  card: string;
+  /** The card face's two blurred ellipses: a light tint top left, a bright neighbour top right. */
+  cardGlow: readonly [string, string];
+  /** The small round token for a card (My Deck pill, the card morphing into it): two lights on white. */
+  dot: readonly [string, string];
 };
 
 export type Scheme = 'light' | 'dark';
@@ -45,6 +51,21 @@ const faces: Record<Tone, string> = {
   neutral: '#A7A7A8',
 };
 
+// Full color cards. rose and lagoon are Figma's (223:21706, 223:21889); the rest are derived the
+// same way: a deep fill white text reads on, a light tint of the hue top left, a bright
+// neighbouring hue top right. Same in both modes: the card is its own colored surface.
+const cards: Record<Tone, { fill: string; glow: readonly [string, string]; dot: readonly [string, string] }> = {
+  rose: { fill: '#E45794', glow: ['#FEB4D4', '#FFCC41'], dot: ['#F669A6', '#FEF26B'] },
+  lagoon: { fill: '#32C8B1', glow: ['#5ED6C4', '#D3FF41'], dot: ['#3FD9C2', '#D3FF41'] },
+  ember: { fill: '#F0663C', glow: ['#FFB199', '#FFCC41'], dot: ['#FF7A4D', '#FEF26B'] },
+  violet: { fill: '#8A6CF0', glow: ['#C9B8FF', '#FEB4D4'], dot: ['#8D65F0', '#6BFE81'] },
+  lime: { fill: '#5DB33A', glow: ['#A8EB6E', '#FEF26B'], dot: ['#6FD34A', '#FEF26B'] },
+  sky: { fill: '#3C97EE', glow: ['#9FD4FF', '#5ED6C4'], dot: ['#66DBF5', '#FF8CF2'] },
+  gold: { fill: '#E8A21E', glow: ['#FEF26B', '#FFB199'], dot: ['#F5B731', '#FFB199'] },
+  cream: { fill: '#8E8E90', glow: ['#CFCFCF', '#E6E6E6'], dot: ['#A7A7A8', '#E6E6E6'] },
+  neutral: { fill: '#8E8E90', glow: ['#CFCFCF', '#E6E6E6'], dot: ['#A7A7A8', '#E6E6E6'] },
+};
+
 // Text in a person's color: deep on white, bright on black.
 const inks: Record<Scheme, Record<Tone, string>> = {
   light: {
@@ -59,7 +80,7 @@ const inks: Record<Scheme, Record<Tone, string>> = {
 
 const buildTones = (s: Scheme) =>
   Object.fromEntries(
-    (Object.keys(faces) as Tone[]).map((t) => [t, { face: faces[t], accent: faces[t], ink: inks[s][t], glow: glows[t] }]),
+    (Object.keys(faces) as Tone[]).map((t) => [t, { face: faces[t], accent: faces[t], ink: inks[s][t], glow: glows[t], card: cards[t].fill, cardGlow: cards[t].glow, dot: cards[t].dot }]),
   ) as Record<Tone, ToneSpec>;
 
 const light = {
@@ -90,21 +111,18 @@ const light = {
   action: { primary: '#1A1A1A', onPrimary: '#FFFFFF', positive: '#3BCF6C', negative: '#FF6159', neutral: '#A2A2A2' },
   accent: { tag: '#36B469', highlight: '#C4527C', heart: '#EF4242' },
   seesaw: { bar: '#E3DED3', fulcrum: '#6E6878' },
-  chip: { fill: '#F5F5F5', ink: '#1A1A1A' },
+  chip: { fill: '#F5F5F5', ink: '#1A1A1A', idle: '#5C5C5C' },
   // Cards waiting behind the top card: [furthest, nearer], on the Table and inside My Deck.
-  stack: { table: ['#F5F5F5', '#EFEFEF'], drawer: ['#D2D2D2', '#DEDEDE'] },
-  // The My Deck drawer (Figma "deck": back panel + front lip).
-  drawer: {
-    backClosed: ['#6E6E6E', '#ACACAC'],
-    backOpen: ['#AAAAAA', '#9B9B9B'],
-    front: ['#EFEFEF', '#9D9D9D'],
-    edge: '#FFFFFF',
-    handle: '#A2A2A2',
-    hint: '#FFFFFF',
-    pill: 'rgba(255,255,255,0.9)',
-    pillInk: '#1A1A1A',
-    pillIcon: '#5C5C5C',
+  stack: { table: ['#F3F3F3', '#EAE9E9'], drawer: ['#D2D2D2', '#DEDEDE'] },
+  // The My Deck pill under the Table (Figma 223:21734, 223:21902, 223:21960, 232:22580).
+  pill: {
+    fill: 'rgba(244,244,244,0.9)', fillActive: 'rgba(239,239,239,0.9)', dash: '#DADADA', edge: '#FFFFFF',
+    ring: '#30A71A', more: '#EAE9E9', ink: '#1A1A1A', icon: '#5C5C5C',
   },
+  // My Deck list swipes (Figma 239:22885, 239:23130).
+  swipe: { done: '#36B469', later: '#FF6159', ink: '#FFFFFF' },
+  // The list fades out under the nav (Figma 232:22821).
+  fade: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.9)', '#FFFFFF'],
   glowOpacity: 0.9,
 };
 
@@ -135,19 +153,14 @@ const dark: typeof light = {
   action: { primary: '#F6F1E7', onPrimary: '#0B0A0F', positive: '#2FB45C', negative: '#F0544C', neutral: '#4A4552' },
   accent: { tag: '#5FD58E', highlight: '#FF8FB6', heart: '#FF5A5A' },
   seesaw: { bar: '#3A3542', fulcrum: '#8F889A' },
-  chip: { fill: '#1E1B24', ink: '#F6F1E7' },
+  chip: { fill: '#1E1B24', ink: '#F6F1E7', idle: '#B4AEBD' },
   stack: { table: ['#1A1820', '#211E27'], drawer: ['#2C2833', '#34303C'] },
-  drawer: {
-    backClosed: ['#050407', '#1E1B24'],
-    backOpen: ['#1C1A21', '#141218'],
-    front: ['#2A2631', '#141218'],
-    edge: 'rgba(255,255,255,0.10)',
-    handle: '#4A4552',
-    hint: '#B4AEBD',
-    pill: 'rgba(30,27,36,0.92)',
-    pillInk: '#F6F1E7',
-    pillIcon: '#B4AEBD',
+  pill: {
+    fill: 'rgba(30,27,36,0.92)', fillActive: 'rgba(37,34,44,0.95)', dash: '#4A4552', edge: 'rgba(255,255,255,0.10)',
+    ring: '#2FB45C', more: '#2C2833', ink: '#F6F1E7', icon: '#B4AEBD',
   },
+  swipe: { done: '#2FB45C', later: '#F0544C', ink: '#FFFFFF' },
+  fade: ['rgba(11,10,15,0)', 'rgba(11,10,15,0.9)', '#0B0A0F'],
   glowOpacity: 0.22,
 };
 
@@ -158,6 +171,9 @@ const shadows = {
     card: '0px 16px 48px rgba(17,17,26,0.10), 0px 8px 24px rgba(17,17,26,0.10), 0px 1px 0px rgba(17,17,26,0.10)',
     chip: '0px 16px 48px rgba(17,17,26,0.10), 0px 8px 24px rgba(17,17,26,0.10), 0px 1px 0px rgba(17,17,26,0.10)',
     float: '0px 48px 100px rgba(17,12,46,0.15)',
+    // Figma "ui update 2": the deal card, the cards peeking behind it, the active filter chip.
+    deal: '0px 4px 12px rgba(0,0,0,0.08)',
+    ring: '0px 0px 0px 1px rgba(0,0,0,0.05)',
     sheet: '0px -4px 16px rgba(0,0,0,0.16)',
     row: '0px 2px 8px rgba(99,99,99,0.20)',
   },
@@ -165,6 +181,8 @@ const shadows = {
     card: '0px 16px 48px rgba(0,0,0,0.45), 0px 1px 0px rgba(255,255,255,0.04)',
     chip: '0px 8px 24px rgba(0,0,0,0.4)',
     float: '0px 48px 100px rgba(0,0,0,0.55)',
+    deal: '0px 4px 12px rgba(0,0,0,0.4)',
+    ring: '0px 0px 0px 1px rgba(255,255,255,0.06)',
     sheet: '0px -4px 16px rgba(0,0,0,0.5)',
     row: '0px 2px 8px rgba(0,0,0,0.4)',
   },
