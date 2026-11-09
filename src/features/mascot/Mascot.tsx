@@ -16,7 +16,13 @@ export function mascotSvg(recipe: MascotRecipe | null | undefined, mood: Mood) {
   let svg = cache.get(key);
   if (!svg) {
     // Recipes are checked against the schema (validRecipe), so the part ids are the style's own.
-    svg = createAvatar(openPeeps, toOptions(r, mood) as Parameters<typeof createAvatar<openPeeps.Options>>[1]).toString();
+    // DiceBear wraps the drawing in a full-size mask; Android's SVG renderer scales that mask wrong
+    // at small sizes and cuts the head off from the top. The round frame clips it anyway, so the
+    // mask (and the metadata block) go.
+    svg = createAvatar(openPeeps, toOptions(r, mood) as Parameters<typeof createAvatar<openPeeps.Options>>[1]).toString()
+      .replace(/<metadata[\s\S]*?<\/metadata>/, '')
+      .replace(/<mask id="viewboxMask">[\s\S]*?<\/mask>/, '')
+      .replace(/ mask="url\(#viewboxMask\)"/, '');
     cache.set(key, svg);
   }
   return svg;
