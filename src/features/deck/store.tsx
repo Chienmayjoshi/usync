@@ -7,7 +7,7 @@ import { type EventRow, errorText, type Side, supabase, type TaskRow, type Thank
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
-import { type Card, type DeckAction, deckReducer, type DeckState, type DropPlace, type Owner, type StoryCard } from './model';
+import { arrange, type Card, type DeckAction, deckReducer, type DeckState, type DropPlace, type Owner, type StoryCard } from './model';
 
 // The deck lives in Supabase. Moves apply locally first (so swipes feel instant), then the
 // server applies the same rules in deck_move and realtime brings both phones back in line.
@@ -93,7 +93,10 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     const all = (th.data ?? []) as ThanksRow[];
     setThanked(new Set(all.filter((x) => x.from_member === myId && x.task_id).map((x) => x.task_id as string)));
     setHearts(all.filter((x) => x.from_member !== myId && !x.seen_at));
-    setState((s) => ({ ...s, ...toState(r, e.data as EventRow[], side, myId) }));
+    setState((s) => {
+      const next = toState(r, e.data as EventRow[], side, myId);
+      return { ...s, ...next, cards: arrange(next.cards, s.cards) };
+    });
     setReady(true);
   }, [coupleId, side, myId]);
 
@@ -111,6 +114,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         if (!e.actor || e.actor === myId) return;
         if (e.kind === 'drop') dropped.push(e.task_id);
         if (e.kind === 'done') finished = e.task_id;
+        if (e.kind === 'accept' || e.kind === 'decline') answered = { id: e.task_id, yes: e.kind === 'accept' };
         if (announce) clearTimeout(announce);
         // Wait for the reload that brings the new cards in, then say what happened in one banner.
         announce = setTimeout(tell, 600);
@@ -129,10 +133,24 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     let announce: ReturnType<typeof setTimeout> | null = null;
     let dropped: string[] = [];
     let finished: string | null = null;
+    let answered: { id: string; yes: boolean } | null = null;
     const tell = () => {
       const cards = stateRef.current.cards;
       const who = partnerName.current;
-      if (finished) {
+      const reply = answered && cards.find((c) => c.id === answered?.id);
+      if (reply && answered) {
+        // My partner answered something I asked: a yes lands on both decks, a no goes back on the Table.
+        if (!answered.yes && reply.owner === 'table') {
+          haptics.tick();
+          toast({ kind: 'info', title: `${who} can’t take this one right now`, body: `${reply.title} is back on the table.`, ms: 7000 });
+        } else if (answered.yes && reply.owner === 'together') {
+          haptics.success();
+          toast({ kind: 'info', title: `${who} is in. Doing it together`, body: `${reply.title} is on both your decks.`, ms: 7000 });
+        } else if (answered.yes && reply.owner === 'partner') {
+          haptics.success();
+          toast({ kind: 'info', title: `${who} took it`, body: reply.title, ms: 5000 });
+        }
+      } else if (finished) {
         const card = cards.find((c) => c.id === finished);
         if (card) {
           haptics.success();
@@ -153,6 +171,7 @@ export function DeckProvider({ children }: { children: ReactNode }) {
       }
       dropped = [];
       finished = null;
+      answered = null;
     };
     return () => { if (timer) clearTimeout(timer); if (announce) clearTimeout(announce); supabase.removeChannel(ch); };
   }, [coupleId, load, toast, myId]);

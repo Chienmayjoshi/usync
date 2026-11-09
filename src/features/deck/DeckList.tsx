@@ -10,13 +10,15 @@ import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/line
 import { useNow } from '@/features/mascot/useNow';
 
 import type { CardAnswers } from './DealCard';
-import type { Card } from './model';
+import { type Card, forMe } from './model';
 import { SwipeRow } from './SwipeRow';
 
 type Tab = 'mine' | 'together';
 
 type Props = {
   cards: Card[];
+  /** Cards I asked my partner to do together, waiting on their yes (shown under Doing Together). */
+  pending?: Card[];
   onDone: (c: Card) => void;
   onLater: (c: Card) => void;
   onOpen: (c: Card) => void;
@@ -33,13 +35,15 @@ const FADE_H = 263;
  * My Deck as a list (Figma 223:22064): "My Tasks" and "Doing Together", one row per task.
  * Swipe a row right to finish it, left to put it back on the table for later.
  */
-export function DeckList({ cards, onDone, onLater, onOpen, answer, empty, bottomSpace }: Props) {
+export function DeckList({ cards, pending = [], onDone, onLater, onOpen, answer, empty, bottomSpace }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
   const [tab, setTab] = useState<Tab>('mine');
-  const mine = cards.filter((c) => c.owner !== 'together');
-  const together = cards.filter((c) => c.owner === 'together');
+  // Anything my partner asks of me sits at the top of My Tasks, the tab the deck opens on, so a
+  // "do it together?" is never tucked away on the other tab.
+  const mine = cards.filter((c) => c.owner !== 'together' || forMe(c));
+  const together = [...cards.filter((c) => c.owner === 'together' && !forMe(c)), ...pending];
   const shown = tab === 'mine' ? mine : together;
   const f = t.color.fade;
   const now = useNow();
@@ -69,17 +73,26 @@ export function DeckList({ cards, onDone, onLater, onOpen, answer, empty, bottom
         <ScrollView style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator>
           {shown.map((c, i) => {
             const answers = answer(c);
+            const waiting = pending.includes(c);
+            const ink = t.tones[names.colors.partner].ink;
+            const note = waiting
+              ? `Waiting for ${names.partnerOr} to say yes`
+              : answers && c.request === 'together' ? `${names.partnerOr} wants to do it together`
+              : answers && c.request === 'take' ? `${names.partnerOr} asked you to take it`
+              : answers && c.request === 'give' ? `${names.partnerOr} asked for it`
+              : undefined;
             return (
               <SwipeRow
                 key={c.id}
                 card={c}
                 first={i === 0}
                 onOpen={() => onOpen(c)}
-                onDone={() => onDone(c)}
-                onLater={c.owner === 'together' ? undefined : () => onLater(c)}
+                onDone={waiting ? undefined : () => onDone(c)}
+                onLater={waiting || c.owner === 'together' ? undefined : () => onLater(c)}
+                note={note ? { text: note, ink } : undefined}
                 answers={answers}
                 answerLabels={answers ? labels(c) : undefined}
-                nudge={nudgeFor(c)}
+                nudge={waiting || answers ? undefined : nudgeFor(c)}
               />
             );
           })}

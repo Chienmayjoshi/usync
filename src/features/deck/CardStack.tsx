@@ -199,12 +199,23 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const can = { left: !!actionsNow.left, right: !!actionsNow.right, scroll: n > 1 };
   const canDrop = !!dropNow;
 
+  // A card that just arrived (you added it, or it came back to the Table) comes to the front, so
+  // it never lands somewhere down the stack where you would have to look for it.
+  const seen = useRef(new Set(cards.map((c) => c.id)));
+  useLayoutEffect(() => {
+    const fresh = cards.find((c) => !seen.current.has(c.id));
+    for (const c of cards) seen.current.add(c.id);
+    if (fresh && fresh.id !== at.id) setAt({ H: at.H, id: fresh.id, idx: cards.indexOf(fresh) });
+  }, [cards, at.H, at.id]);
+
   // A new front card that did not arrive by a scroll or swipe (deleted, answered, added): deal it in.
   const shown = useRef<{ id?: string; H: number }>({ H: at.H });
   useLayoutEffect(() => {
     const prev = shown.current;
     shown.current = { id: top?.id, H: at.H };
     if (top?.id === prev.id) return;
+    // The saved copy of a card you just added taking its place: the same card, no second deal-in.
+    if (prev.id?.startsWith('drop-') && top?.id && !top.id.startsWith('drop-')) return;
     flip.set(0);
     deleting.set(0);
     setBack('story');

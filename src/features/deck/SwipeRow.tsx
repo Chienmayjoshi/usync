@@ -34,10 +34,12 @@ type Props = {
   answerLabels?: [string, string];
   /** The partner's mascot, when this card has sat long enough to be nudged. */
   nudge?: { mood: Mood; line: string; recipe: MascotRecipe | null; bg: string; ink: string };
+  /** A line in place of the meta: who asked what, or who this is waiting on. */
+  note?: { text: string; ink: string };
 };
 
 /** A My Deck row: swipe right for DONE, left for LATER (back to the table). Tap for its story. */
-export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge }: Props) {
+export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge, note }: Props) {
   const t = useTheme();
   const s = useStyles();
   const tx = useSharedValue(0);
@@ -116,7 +118,9 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
               </View>
               <View style={s.copy}>
                 <Text style={s.title} color={t.color.text.primary} numberOfLines={1}>{card.title}</Text>
-                {nudge
+                {note
+                  ? <Text style={s.meta} color={note.ink} numberOfLines={1}>{note.text}</Text>
+                  : nudge
                   ? <Text style={s.meta} color={nudge.ink} numberOfLines={1}>{nudge.line}</Text>
                   : <Text style={s.meta} color={t.color.text.secondary} numberOfLines={1}>{meta}</Text>}
               </View>

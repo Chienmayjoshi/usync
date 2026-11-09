@@ -34,7 +34,7 @@ export function useMoves() {
         return undoable(`Asked ${them}`, `${card.title}. It’s on their deck until they answer.`);
       case 'together':
         haptics.together();
-        return undoable(`Asked ${them} to do it together`, card.title);
+        return undoable(`Asked ${them} to do it together`, `${card.title}. It waits in Doing Together until they say yes.`);
       case 'ask_for':
         haptics.trade();
         return undoable(`Asked ${them} for it`, card.title);

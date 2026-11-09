@@ -49,8 +49,8 @@ export function NotificationsBridge() {
     if (Platform.OS === 'web') return;
     const sub = Notifications.addNotificationReceivedListener((n) => {
       const kind = n.request.content.data?.kind;
-      // Hearts, drops and finished jobs already arrive live through the deck's realtime channel.
-      if (kind === 'thanks' || kind === 'drop' || kind === 'done') return;
+      // Hearts, drops, finished jobs and answers to my asks already arrive live through the deck's realtime channel.
+      if (kind === 'thanks' || kind === 'drop' || kind === 'done' || kind === 'answer') return;
       const level = Number(n.request.content.data?.level ?? 0);
       const lead = kind === 'nudge'
         ? <Mascot recipe={mascotRef.current.recipe} mood={MOOD_FOR[(Math.min(3, Math.max(0, level)) as NudgeLevel)]} size={40} bg={mascotRef.current.bg} />

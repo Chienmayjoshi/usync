@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { balanceTilt, byWhen, type Card, deckCards, deckReducer, type DeckState, fakeSort, partnerDeck, splitDrop, tableCards } from './model';
+import { arrange, balanceTilt, byWhen, type Card, deckCards, deckReducer, type DeckState, fakeSort, partnerDeck, splitDrop, tableCards } from './model';
 
 const card = (id: string, patch: Partial<Card> = {}): Card => ({
   id, title: id, bucket: 'Home', effort: '10 min', when: 'this week', detail: '', owner: 'table', status: 'deal', traded: false, weight: 1, story: [], ...patch,
@@ -151,5 +151,31 @@ describe('adding', () => {
     expect(fakeSort('return the parcel')).toMatchObject({ owner: 'table', status: 'deal', surprise: false });
     expect(fakeSort('pottery class', 'mine', true)).toMatchObject({ owner: 'me', status: 'active', surprise: true });
     expect(fakeSort('pottery class', 'table', true).surprise).toBe(false);
+  });
+});
+
+describe('stack order', () => {
+  const t = (id: string, sortAt: string, patch: Partial<Card> = {}) => card(id, { owner: 'table', status: 'deal', sortAt, ...patch });
+
+  it('puts the newest Table card first on the first load', () => {
+    const rows = [t('old', '2026-11-01'), t('mid', '2026-11-05'), t('new', '2026-11-08')];
+    expect(arrange(rows, []).map((c) => c.id)).toEqual(['new', 'mid', 'old']);
+  });
+
+  it('keeps the order you left it in, and brings a just added card to the front', () => {
+    const shown = [t('b', '2026-11-05'), t('a', '2026-11-01')];
+    const rows = [t('a', '2026-11-01'), t('b', '2026-11-05'), t('added', '2026-11-09')];
+    expect(arrange(rows, shown).map((c) => c.id)).toEqual(['added', 'b', 'a']);
+  });
+
+  it('brings a card back to the front when it returns to the Table from elsewhere', () => {
+    const shown = [t('a', '2026-11-01'), card('x', { owner: 'together', request: 'together', requestedBy: 'me' })];
+    const rows = [t('a', '2026-11-01'), t('x', '2026-11-09')];
+    expect(arrange(rows, shown).map((c) => c.id)).toEqual(['x', 'a']);
+  });
+
+  it('drops a just added card on top of the stack locally too', () => {
+    const s = deckReducer(state([t('a', '2026-11-01')]), { type: 'drop', cards: [t('n', '2026-11-09')], place: 'table' });
+    expect(s.cards[0].id).toBe('n');
   });
 });

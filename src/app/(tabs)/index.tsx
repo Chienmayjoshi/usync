@@ -9,7 +9,7 @@ import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { DeckList } from '@/features/deck/DeckList';
 import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
-import { type Card, byWhen, deckCards, forMe, tableCards, type When } from '@/features/deck/model';
+import { type Card, byWhen, deckCards, forMe, pendingTogether, tableCards, type When } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
 import { MOOD_FOR, nudgeLevel } from '@/features/mascot/lines';
@@ -117,6 +117,7 @@ export default function TableScreen() {
         <Animated.View style={[s.list, { top: headerTop + 92 }, listIn]} pointerEvents={expanded ? 'box-none' : 'none'}>
           <DeckList
             cards={deck}
+            pending={pendingTogether(state)}
             onDone={(c) => move(c, 'done')}
             onLater={(c) => move(c, 'table')}
             onOpen={setUpdating}

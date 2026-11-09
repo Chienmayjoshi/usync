@@ -88,7 +88,8 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
   const snapshot = (label: string) => ({ cards: state.cards, album: state.album, label });
   if (action.type === 'undo') return state.undo ? { ...state, cards: state.undo.cards, album: state.undo.album, undo: null } : state;
   if (action.type === 'clearUndo') return { ...state, undo: null };
-  if (action.type === 'drop') return { ...state, cards: [...state.cards, ...action.cards] };
+  // What you just added comes up front, so you see it land.
+  if (action.type === 'drop') return { ...state, cards: [...action.cards, ...state.cards] };
 
   const c = find(state.cards, action.id);
   if (!c) return state;
@@ -163,7 +164,31 @@ export function deckCards(s: DeckState): Card[] {
 export const partnerDeck = (s: DeckState) =>
   s.cards.filter((c) => c.status !== 'done' && (c.owner === 'partner' || (c.owner === 'together' && c.requestedBy === 'me' && c.request === 'together')));
 
-export const togetherCards = (s: DeckState) => s.cards.filter((c) => c.owner === 'together' && c.status !== 'done' && !c.request);
+/** Cards I asked my partner to do together, still waiting on their yes. */
+export const pendingTogether = (s: DeckState) =>
+  s.cards.filter((c) => c.owner === 'together' && c.request === 'together' && c.requestedBy === 'me' && c.status !== 'done');
+
+/**
+ * Keeps the order the phone already shows across a reload, so a reload never reshuffles the
+ * stack. Cards that are new to this phone, or that just came back to the Table from elsewhere,
+ * go up front, newest first. On the first load the Table is newest first.
+ */
+export function arrange(next: Card[], prev: Card[]): Card[] {
+  const newest = (a: Card, b: Card) => (b.sortAt ?? b.createdAt ?? '').localeCompare(a.sortAt ?? a.createdAt ?? '');
+  if (!prev.length) {
+    const table = next.filter((c) => c.owner === 'table').sort(newest);
+    return [...table, ...next.filter((c) => c.owner !== 'table')];
+  }
+  const was = new Map(prev.map((c, i) => [c.id, { i, owner: c.owner }]));
+  const fresh = (c: Card) => {
+    const w = was.get(c.id);
+    return !w || (c.owner === 'table' && w.owner !== 'table');
+  };
+  const known = next.filter((c) => !fresh(c)).sort((a, b) => was.get(a.id)!.i - was.get(b.id)!.i);
+  return [...next.filter(fresh).sort(newest), ...known];
+}
+
+export const togetherCards =(s: DeckState) => s.cards.filter((c) => c.owner === 'together' && c.status !== 'done' && !c.request);
 export const waitingCards = (s: DeckState) => s.cards.filter((c) => c.status === 'waiting');
 
 /** The redesign's filters. "This week" is anything due within the week; the rest is later. */
