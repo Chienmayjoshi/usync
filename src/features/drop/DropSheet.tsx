@@ -3,7 +3,7 @@ import { Stop } from 'phosphor-react-native';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, type TextStyle, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import Animated, { Easing, FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { useAccount, useNames } from '@/features/account/account';
 import { type Card, type DropPlace, fakeSort, splitDrop } from '@/features/deck/model';
@@ -155,24 +155,31 @@ function DropBody({ mode }: { mode: DropMode }) {
               />
             </View>
           </View>
-          {partner && (surprise ? (
-            <Animated.View key="note" entering={FadeIn.duration(180).delay(80)} exiting={FadeOut.duration(120)} style={styles.note}>
-              <Text variant="caption" color={t.color.text.secondary}>{`Just you. ${names.partnerOr} sees it once you reveal it.`}</Text>
-            </Animated.View>
-          ) : (
-            <Animated.View key="who" entering={FadeIn.duration(180).delay(80)} exiting={FadeOut.duration(120)} style={styles.block}>
-              <Text style={styles.heading} color={t.color.text.primary}>WHO’S DOING IT?</Text>
-              <Segmented shape="pill" value={place} onChange={pickPlace} options={[{ value: 'table', label: 'Not Decided' }, { value: 'mine', label: 'Myself' }, { value: 'together', label: 'Together' }]} />
-            </Animated.View>
-          ))}
-          <Animated.View layout={SHIFT} style={styles.block}>
+          {/* One fixed slot for "Who's doing it?" and the surprise note, so the sheet keeps its
+              height when Surprise flips: the two crossfade in place, nothing below moves. */}
+          {partner && (
+            <View style={styles.slot}>
+              {surprise ? (
+                <Animated.View key="note" entering={FadeIn.duration(180).delay(60)} exiting={FadeOut.duration(120)} style={[styles.fill, styles.note]}>
+                  <Text style={styles.noteLead} color={t.color.text.primary}>Just you.</Text>
+                  <Text variant="body/md" color={t.color.text.secondary} numberOfLines={2}>{`${names.partnerOr} sees it once you reveal it.`}</Text>
+                </Animated.View>
+              ) : (
+                <Animated.View key="who" entering={FadeIn.duration(180).delay(60)} exiting={FadeOut.duration(120)} style={[styles.fill, styles.block]}>
+                  <Text style={styles.heading} color={t.color.text.primary}>WHO’S DOING IT?</Text>
+                  <Segmented shape="pill" value={place} onChange={pickPlace} options={[{ value: 'table', label: 'Not Decided' }, { value: 'mine', label: 'Myself' }, { value: 'together', label: 'Together' }]} />
+                </Animated.View>
+              )}
+            </View>
+          )}
+          <View style={styles.block}>
             <Text style={styles.heading} color={t.color.text.primary}>{surprise ? 'REVEAL IT BY?' : 'WHAT’S THE PRIORITY?'}</Text>
             <PrioritySlider value={step} onChange={setPicked} accessibilityLabel={surprise ? 'Reveal it by' : 'Priority'} />
-          </Animated.View>
-          <Animated.View layout={SHIFT} style={styles.row}>
+          </View>
+          <View style={styles.row}>
             <PopButton label={surprise ? 'Add surprise' : 'Add Task'} tone="primary" fill large onPress={submit} disabled={empty} />
             <MicButton listening={voice.listening} onPress={mic.onPress} disabled={mic.disabled} />
-          </Animated.View>
+          </View>
           {voice.error && <Text variant="caption" color={t.color.action.negative}>{voice.error}</Text>}
         </View>
       ) : (
@@ -235,8 +242,6 @@ function SortRow({ card, sorting }: { card: Card; sorting: boolean }) {
 }
 
 const MIC = 56;
-/** Rows below the Who block glide into place when it gives way to the surprise note (on-screen move: ease-in-out). */
-const SHIFT = LinearTransition.duration(220).easing(Easing.bezier(0.77, 0, 0.175, 1));
 // Chrome draws its own focus ring on the textarea; the sheet's stroke is the focus state instead.
 const noRing = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : null;
 
@@ -251,7 +256,11 @@ const useStyles = makeStyles((t) => ({
   // tracking can push the last word off ("ADD A"). Figma's -0.24 only on iOS.
   heading: { fontFamily: fonts.uiBold, fontSize: 12, lineHeight: 16, letterSpacing: Platform.OS === 'ios' ? -0.24 : 0 },
   title: { flexShrink: 0, flexGrow: 1, marginRight: 12 },
-  note: { minHeight: 16 },
+  // The Who block's own height (a 16 heading, 12, the 48 control), kept for the note too.
+  slot: { height: 76 },
+  fill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  note: { justifyContent: 'center', gap: 2 },
+  noteLead: { fontFamily: fonts.uiBold, fontSize: 16, lineHeight: 22 },
   // Figma 267:24587: 200 tall, r24, a white 1.5 edge and a soft drop, the words big and black.
   input: {
     height: 200, borderRadius: 24, backgroundColor: t.color.field.bg, borderWidth: 1.5, borderColor: t.color.field.border,
