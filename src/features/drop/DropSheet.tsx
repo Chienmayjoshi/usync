@@ -132,7 +132,7 @@ function DropBody({ mode }: { mode: DropMode }) {
         <View style={styles.form}>
           <View style={styles.top}>
             <View style={styles.header}>
-              <Text style={styles.heading} color={voice.listening ? t.color.accent.tag : t.color.text.primary}>{voice.listening ? 'LISTENING…' : 'ADD A TASK'}</Text>
+              <Text style={[styles.heading, styles.title]} numberOfLines={1} color={voice.listening ? t.color.accent.tag : t.color.text.primary}>{voice.listening ? 'LISTENING…' : 'ADD A TASK'}</Text>
               {partner && (
                 <View style={styles.surprise}>
                   <Text style={styles.heading} color={t.color.text.secondary}>SURPRISE?</Text>
@@ -247,7 +247,10 @@ const useStyles = makeStyles((t) => ({
   block: { gap: 12 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
   surprise: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  heading: { fontFamily: fonts.uiBold, fontSize: 12, lineHeight: 16, letterSpacing: -0.24 },
+  // Android measures text without its letter spacing and then draws it with it, so a tight
+  // tracking can push the last word off ("ADD A"). Figma's -0.24 only on iOS.
+  heading: { fontFamily: fonts.uiBold, fontSize: 12, lineHeight: 16, letterSpacing: Platform.OS === 'ios' ? -0.24 : 0 },
+  title: { flexShrink: 0, flexGrow: 1, marginRight: 12 },
   note: { minHeight: 16 },
   // Figma 267:24587: 200 tall, r24, a white 1.5 edge and a soft drop, the words big and black.
   input: {
