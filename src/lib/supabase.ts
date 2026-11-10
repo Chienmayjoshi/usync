@@ -47,6 +47,8 @@ export type TaskRow = {
   request: 'take' | 'together' | 'give' | null;
   requested_by: string | null;
   surprise: boolean;
+  /** The date its priority stands for; a surprise's reveal date (0009). */
+  due_on?: string | null;
   done_by: string | null;
   done_at: string | null;
   sort_at: string;

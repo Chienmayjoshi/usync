@@ -2,6 +2,8 @@ import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
+import { postponed, revealLabel } from '@/features/drop/priority';
+
 import type { Card, Move } from './model';
 import { useDeck } from './store';
 
@@ -17,7 +19,7 @@ export function useMoves() {
   const undoable = (title: string, body: string) =>
     toast({ kind: 'info', title, body, action: { label: 'Undo', onPress: () => { haptics.tick(); dispatch({ type: 'undo' }); } }, onExpire: () => dispatch({ type: 'clearUndo' }) });
 
-  return (card: Card, move: Move | 'next' | 'prev' | 'delete') => {
+  return (card: Card, move: Move | 'next' | 'prev' | 'delete' | 'postpone') => {
     dispatch({ type: move, id: card.id });
     switch (move) {
       case 'next':
@@ -47,8 +49,14 @@ export function useMoves() {
       case 'table':
         haptics.trade();
         return undoable('Back on the table', card.title);
+      case 'postpone': {
+        haptics.tick();
+        const label = revealLabel(postponed(card.dueOn, Date.now()), Date.now());
+        return undoable(label === 'Reveal tomorrow' ? 'Reveal moved to tomorrow' : label.replace('Reveal by', 'Reveal moved to'), card.title);
+      }
       case 'done':
         haptics.success();
+        if (card.surprise) return undoable(`Revealed 🎁  ·  ${them} can see it now`, card.title);
         return undoable('Done  ·  into the album', card.title);
     }
   };

@@ -47,6 +47,7 @@ function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string):
     doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at, waitingNote: r.waiting_note,
     droppedBy: r.dropped_by ? (r.dropped_by === myId ? 'me' : 'partner') : null, createdAt: r.created_at, sortAt: r.sort_at,
     request: r.request ?? null, requestedBy: r.requested_by ? (r.requested_by === myId ? 'me' : 'partner') : null, surprise: !!r.surprise,
+    dueOn: r.due_on ?? null,
   }));
   const album: StoryCard[] = rows
     .filter((r) => r.status === 'done')
@@ -58,7 +59,7 @@ function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string):
   return { cards, album };
 }
 
-type Prev = { id: string; owner: TaskRow['owner']; status: TaskRow['status']; traded: boolean; sort_at: string; request: TaskRow['request']; requested_by: string | null };
+type Prev = { postpone?: number; id: string; owner: TaskRow['owner']; status: TaskRow['status']; traded: boolean; sort_at: string; request: TaskRow['request']; requested_by: string | null };
 
 export function DeckProvider({ children }: { children: ReactNode }) {
   const { me, partner } = useAccount();
@@ -152,7 +153,11 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         }
       } else if (finished) {
         const card = cards.find((c) => c.id === finished);
-        if (card) {
+        if (card?.surprise) {
+          // A surprise only becomes visible once it is revealed, so this is the reveal itself.
+          haptics.success();
+          toast({ kind: 'info', title: `${who} has a surprise for you 🎁`, body: card.title, ms: 9000, action: { label: 'Send a heart', onPress: () => askHeart(card) } });
+        } else if (card) {
           haptics.success();
           toast({ kind: 'info', title: `${who} finished it`, body: card.title, ms: 7000, action: { label: 'Send a heart', onPress: () => askHeart(card) } });
         }
@@ -185,14 +190,23 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     if (!me?.couple_id || !me.side) return;
     // Nothing is dealt any more: a card goes on the shared Table, or straight onto my deck.
     // Before the partner joins there is no table to share, so everything is mine.
-    const mine = place === 'mine' || !partner;
+    const mine = place === 'mine' || surprise || !partner;
     const inserts = cards.map((c) => ({
       couple_id: me.couple_id!, title: c.title, raw: c.title, bucket: c.bucket, effort: c.effort, weight: c.weight, when_text: c.when,
       detail: '', owner: mine ? me.side! : 'table', status: mine ? 'active' : 'deal', dropped_by: me.id, surprise: mine && surprise,
+      ...(c.dueOn ? { due_on: c.dueOn } : {}),
     }));
     const { data, error } = await supabase.from('tasks').insert(inserts).select('id, couple_id');
     if (error) throw error;
     await supabase.from('task_events').insert(data.map((t) => ({ task_id: t.id, couple_id: t.couple_id, actor: me.id, kind: 'drop', text: `${me.name} added it` })));
+    // "Together" goes on the Table and is asked straight away, the same move as swiping it right:
+    // my partner gets the request, and a no puts it back on the Table (0006, 0008).
+    if (place === 'together' && !mine) {
+      for (const t of data) {
+        const { error: e } = await supabase.rpc('deck_move', { task: t.id, move: 'together' });
+        if (e) throw e;
+      }
+    }
   }, [me, partner]);
 
   const dispatch = useCallback((a: DeckAction) => {
@@ -202,10 +216,17 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     // Next card is a private glance: nothing changes for anyone.
     if (a.type === 'next' || a.type === 'prev') return;
     if (a.type === 'delete') { prev.current = null; supabase.rpc('delete_task', { task: a.id }).then(({ error }) => error && fail(error)); return; }
+    if (a.type === 'postpone') {
+      prev.current = { postpone: a.days ?? 1, id: a.id } as Prev;
+      supabase.rpc('postpone_surprise', { task: a.id, days: a.days ?? 1 }).then(({ error }) => error && fail(error));
+      return;
+    }
     if (a.type === 'undo') {
       const p = prev.current;
       prev.current = null;
-      if (p) {
+      if (p?.postpone) {
+        supabase.rpc('postpone_surprise', { task: p.id, days: -p.postpone }).then(({ error }) => error && fail(error));
+      } else if (p) {
         supabase.rpc('deck_restore_v2', {
           task: p.id, prev_owner: p.owner, prev_status: p.status, prev_traded: p.traded, prev_sort: p.sort_at, prev_request: p.request, prev_requested_by: p.requested_by,
         }).then(({ error }) => error && fail(error));
@@ -258,3 +279,4 @@ export function useDeck() {
   if (!v) throw new Error('useDeck must be used inside DeckProvider');
   return v;
 }
+

@@ -5,14 +5,18 @@ import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 
 import { Text } from './Text';
 
-type Props<T extends string> = { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; accent?: string };
+type Props<T extends string> = {
+  value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; accent?: string;
+  /** `pill`: fully round track and plates (the add-task sheet, Figma 267:24597). */
+  shape?: 'rounded' | 'pill';
+};
 
 /** Two to four views of the same thing. The active one sits on a white plate in a grey track. */
-export function Segmented<T extends string>({ value, options, onChange, accent }: Props<T>) {
+export function Segmented<T extends string>({ value, options, onChange, accent, shape = 'rounded' }: Props<T>) {
   const t = useTheme();
   const s = useStyles();
   return (
-    <View style={s.row} accessibilityRole="tablist">
+    <View style={[s.row, shape === 'pill' && s.pill]} accessibilityRole="tablist">
       {options.map((o) => {
         const on = o.value === value;
         return (
@@ -21,7 +25,7 @@ export function Segmented<T extends string>({ value, options, onChange, accent }
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             onPress={() => { if (!on) { haptics.tick(); onChange(o.value); } }}
-            style={[s.seg, on && s.on]}
+            style={[s.seg, shape === 'pill' && s.pill, on && s.on]}
           >
             <Text variant={on ? 'title/md' : 'body/md'} style={s.label} color={on ? accent ?? t.color.text.primary : t.color.text.secondary}>{o.label}</Text>
           </Pressable>
@@ -37,4 +41,5 @@ const useStyles = makeStyles((t) => ({
   seg: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: t.radius.sm, borderWidth: 1, borderColor: 'transparent' },
   on: { backgroundColor: t.color.bg.raised, borderColor: t.color.border.strong },
   label: { fontSize: 14 },
+  pill: { borderRadius: 40 },
 }));

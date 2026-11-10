@@ -35,7 +35,7 @@ const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 
 const DAY_SHORT: Record<string, string> = { sun: 'sunday', mon: 'monday', tue: 'tuesday', tues: 'tuesday', wed: 'wednesday', thu: 'thursday', thur: 'thursday', thurs: 'thursday', fri: 'friday', sat: 'saturday' };
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-function whenOf(raw: string): string {
+export function whenOf(raw: string): string {
   const t = raw.toLowerCase();
   if (/\b(today|aaj|tonight|aaj raat)\b/.test(t)) return 'today';
   if (/\b(tomorrow|kal|tmrw|tmr)\b/.test(t)) return 'tomorrow';

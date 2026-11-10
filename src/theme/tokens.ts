@@ -121,6 +121,9 @@ const light = {
   },
   // My Deck list swipes (Figma 239:22885, 239:23130).
   swipe: { done: '#36B469', later: '#FF6159', ink: '#FFFFFF' },
+  // Add-task sheet (Figma 267:24575): the big input card and the priority track's idle stops.
+  field: { bg: '#F0F0F0', border: '#FFFFFF', placeholder: '#A3A3A3', shadow: '0px 4px 12px 0px rgba(0,0,0,0.08)' },
+  dotIdle: '#D9D9D9',
   // The list fades out under the nav (Figma 232:22821).
   fade: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.9)', '#FFFFFF'],
   glowOpacity: 0.9,
@@ -160,6 +163,8 @@ const dark: typeof light = {
     ring: '#2FB45C', more: '#2C2833', ink: '#F6F1E7', icon: '#B4AEBD',
   },
   swipe: { done: '#2FB45C', later: '#F0544C', ink: '#FFFFFF' },
+  field: { bg: '#1E1B24', border: 'rgba(255,255,255,0.06)', placeholder: '#6E6878', shadow: '0px 4px 12px 0px rgba(0,0,0,0.4)' },
+  dotIdle: '#3A3542',
   fade: ['rgba(11,10,15,0)', 'rgba(11,10,15,0.9)', '#0B0A0F'],
   glowOpacity: 0.22,
 };

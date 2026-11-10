@@ -3,7 +3,7 @@ import { Stop } from 'phosphor-react-native';
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, type TextStyle, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 
 import { useAccount, useNames } from '@/features/account/account';
 import { type Card, type DropPlace, fakeSort, splitDrop } from '@/features/deck/model';
@@ -21,6 +21,8 @@ import { useToast } from '@/ui/Toast';
 
 import { useVoice } from './voice';
 import { VoiceBar } from './VoiceBar';
+import { PrioritySlider } from './PrioritySlider';
+import { type Step, stepFromText } from './priority';
 
 export type DropMode = 'type' | 'voice';
 
@@ -63,14 +65,18 @@ function DropBody({ mode }: { mode: DropMode }) {
   useEffect(() => {
     AsyncStorage.getItem(PLACE_KEY).then((v) => { if (v === 'table' || v === 'mine') setPlace(v); }).catch(() => undefined);
   }, []);
-  const pickPlace = (v: DropPlace) => { setPlace(v); if (v === 'table') setSurprise(false); AsyncStorage.setItem(PLACE_KEY, v).catch(() => undefined); };
-  const toggleSurprise = (on: boolean) => { setSurprise(on); if (on) pickPlace('mine'); };
+  // Not Decided and Myself are remembered between adds; Together is asked fresh each time.
+  const pickPlace = (v: DropPlace) => { setPlace(v); if (v !== 'together') AsyncStorage.setItem(PLACE_KEY, v).catch(() => undefined); };
+  // A surprise is always mine: it hides "Who's doing it?" and leaves the pick as it was for later.
+  const toggleSurprise = (on: boolean) => setSurprise(on);
+  // The knob follows the typed words ("kal", "by Friday") until it is moved by hand.
+  const [picked, setPicked] = useState<Step | null>(null);
+  const step: Step = picked ?? stepFromText(text) ?? 'today';
   const [phase, setPhase] = useState<Phase>('typing');
   const [preview, setPreview] = useState<Card[]>([]);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const raw = useVoice(text, setText);
   const voice = VOICE_READY ? raw : { ...raw, available: false, listening: false, error: null };
-  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
     const pending = timers.current;
@@ -96,8 +102,8 @@ function DropBody({ mode }: { mode: DropMode }) {
     const parts = splitDrop(text);
     if (!parts.length) return;
     haptics.press();
-    const where: DropPlace = partner ? place : 'mine';
-    const cards = parts.map((p) => fakeSort(p, where, surprise));
+    const where: DropPlace = surprise || !partner ? 'mine' : place;
+    const cards = parts.map((p) => fakeSort(p, where, surprise, step));
     setPreview(cards);
     setPhase('sorting');
     // Card appears instantly; sorting resolves without blocking (rule F8).
@@ -105,7 +111,10 @@ function DropBody({ mode }: { mode: DropMode }) {
     timers.current.push(setTimeout(() => {
       dispatch({ type: 'drop', cards, place: where, surprise });
       haptics.success();
-      const body = surprise ? `Only you can see it until it’s done.` : where === 'mine' ? 'It’s on your deck.' : `It’s on the table. You or ${names.partnerOr} can take it.`;
+      const body = surprise ? `Only you can see it until you reveal it.`
+        : where === 'mine' ? 'It’s on your deck.'
+        : where === 'together' ? `Asked ${names.partnerOr} to do it together. It waits in Doing Together until they say yes.`
+        : `It’s on the table. You or ${names.partnerOr} can take it.`;
       toast({ kind: 'info', title: `${cards.length === 1 ? '1 card' : `${cards.length} cards`} added`, body, ms: 4500 });
       onClose();
     }, 2100));
@@ -120,42 +129,52 @@ function DropBody({ mode }: { mode: DropMode }) {
       {phase === 'typing' && mode === 'voice' && voice.listening ? (
         <VoiceBar text={text} onStop={toggleVoice} />
       ) : phase === 'typing' ? (
-        <>
-          <Text variant="label/md" color={voice.listening ? t.color.accent.tag : t.color.text.secondary}>{voice.listening ? 'Listening…' : 'Add a task'}</Text>
-          <View style={[styles.input, focused && styles.inputFocus, voice.listening && styles.inputLive]}>
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={voice.listening ? 'Say it like you’d tell them…' : 'Enter a task here'}
-              placeholderTextColor={t.color.text.placeholder}
-              keyboardAppearance={t.scheme}
-              multiline
-              autoFocus={mode === 'type' || !voice.available}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              style={[styles.inputText, noRing]}
-              accessibilityLabel="What needs doing?"
-            />
-          </View>
-          {partner && (
-            <View style={styles.who}>
-              <Text variant="label/md" color={t.color.text.secondary}>Where does it go?</Text>
-              <Segmented value={place} onChange={pickPlace} options={[{ value: 'table', label: 'On the table' }, { value: 'mine', label: 'My deck' }]} />
-              <View style={styles.switchRow}>
-                <View style={styles.flex}>
-                  <Text variant="title/md" style={styles.switchTitle}>{`A surprise for ${names.partnerOr}`}</Text>
-                  <Text variant="caption" color={t.color.text.secondary}>Only you can see it until it’s done.</Text>
+        <View style={styles.form}>
+          <View style={styles.top}>
+            <View style={styles.header}>
+              <Text style={styles.heading} color={voice.listening ? t.color.accent.tag : t.color.text.primary}>{voice.listening ? 'LISTENING…' : 'ADD A TASK'}</Text>
+              {partner && (
+                <View style={styles.surprise}>
+                  <Text style={styles.heading} color={t.color.text.secondary}>SURPRISE?</Text>
+                  <Toggle size="sm" value={surprise} onChange={toggleSurprise} accessibilityLabel={`A surprise for ${names.partnerOr}`} />
                 </View>
-                <Toggle value={surprise} onChange={toggleSurprise} accessibilityLabel={`A surprise for ${names.partnerOr}`} />
-              </View>
+              )}
             </View>
-          )}
-          <View style={styles.row}>
-            <PopButton label={surprise ? 'Add surprise' : 'Add task'} tone="primary" fill large onPress={submit} disabled={empty} />
-            <MicButton listening={voice.listening} onPress={mic.onPress} disabled={mic.disabled} />
+            <View style={[styles.input, voice.listening && styles.inputLive]}>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder={voice.listening ? 'SAY IT LIKE YOU’D TELL THEM…' : surprise ? 'WHAT’S THE SURPRISE?' : 'ENTER TASK HERE'}
+                placeholderTextColor={t.color.field.placeholder}
+                keyboardAppearance={t.scheme}
+                multiline
+                maxFontSizeMultiplier={1}
+                autoFocus={mode === 'type' || !voice.available}
+                style={[styles.inputText, noRing]}
+                accessibilityLabel={surprise ? 'What’s the surprise?' : 'What needs doing?'}
+              />
+            </View>
           </View>
+          {partner && (surprise ? (
+            <Animated.View key="note" entering={FadeIn.duration(180).delay(80)} exiting={FadeOut.duration(120)} style={styles.note}>
+              <Text variant="caption" color={t.color.text.secondary}>{`Just you. ${names.partnerOr} sees it once you reveal it.`}</Text>
+            </Animated.View>
+          ) : (
+            <Animated.View key="who" entering={FadeIn.duration(180).delay(80)} exiting={FadeOut.duration(120)} style={styles.block}>
+              <Text style={styles.heading} color={t.color.text.primary}>WHO’S DOING IT?</Text>
+              <Segmented shape="pill" value={place} onChange={pickPlace} options={[{ value: 'table', label: 'Not Decided' }, { value: 'mine', label: 'Myself' }, { value: 'together', label: 'Together' }]} />
+            </Animated.View>
+          ))}
+          <Animated.View layout={SHIFT} style={styles.block}>
+            <Text style={styles.heading} color={t.color.text.primary}>{surprise ? 'REVEAL IT BY?' : 'WHAT’S THE PRIORITY?'}</Text>
+            <PrioritySlider value={step} onChange={setPicked} accessibilityLabel={surprise ? 'Reveal it by' : 'Priority'} />
+          </Animated.View>
+          <Animated.View layout={SHIFT} style={styles.row}>
+            <PopButton label={surprise ? 'Add surprise' : 'Add Task'} tone="primary" fill large onPress={submit} disabled={empty} />
+            <MicButton listening={voice.listening} onPress={mic.onPress} disabled={mic.disabled} />
+          </Animated.View>
           {voice.error && <Text variant="caption" color={t.color.action.negative}>{voice.error}</Text>}
-        </>
+        </View>
       ) : (
         <>
           <Text variant="label/md" color={t.color.text.secondary}>{`1 line → ${preview.length} ${preview.length === 1 ? 'card' : 'cards'}`}</Text>
@@ -216,15 +235,30 @@ function SortRow({ card, sorting }: { card: Card; sorting: boolean }) {
 }
 
 const MIC = 56;
+/** Rows below the Who block glide into place when it gives way to the surprise note (on-screen move: ease-in-out). */
+const SHIFT = LinearTransition.duration(220).easing(Easing.bezier(0.77, 0, 0.175, 1));
 // Chrome draws its own focus ring on the textarea; the sheet's stroke is the focus state instead.
 const noRing = Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : null;
 
 const useStyles = makeStyles((t) => ({
-  // Figma "Input" (149:8583): 100 tall, r10, 14 padding, a 1.5 ink stroke while you type.
-  input: { backgroundColor: t.color.bg.surface, borderRadius: 10, borderWidth: 1.5, borderColor: 'transparent', minHeight: 100 },
-  inputFocus: { borderColor: t.color.text.primary },
+  // Figma "Sheet: update" (267:24575): sections 24 apart, a heading 12 above each.
+  form: { gap: 24 },
+  top: { gap: 12 },
+  block: { gap: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 24 },
+  surprise: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heading: { fontFamily: fonts.uiBold, fontSize: 12, lineHeight: 16, letterSpacing: -0.24 },
+  note: { minHeight: 16 },
+  // Figma 267:24587: 200 tall, r24, a white 1.5 edge and a soft drop, the words big and black.
+  input: {
+    height: 200, borderRadius: 24, backgroundColor: t.color.field.bg, borderWidth: 1.5, borderColor: t.color.field.border,
+    boxShadow: t.color.field.shadow, overflow: 'hidden',
+  },
   inputLive: { borderColor: t.color.accent.tag },
-  inputText: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22, flexGrow: 1, minHeight: 97, padding: 14, borderRadius: 8.5, textAlignVertical: 'top' },
+  inputText: {
+    color: t.color.text.primary, fontFamily: fonts.uiExtraBold, fontSize: 24, lineHeight: 32, letterSpacing: -0.48,
+    flex: 1, padding: 24, paddingTop: 24, textAlignVertical: 'top',
+  },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   who: { gap: 12 },
   dim: { opacity: 0.3 },

@@ -150,7 +150,8 @@ describe('adding', () => {
   it('lands on the table by default, or on my deck; a surprise only on my deck', () => {
     expect(fakeSort('return the parcel')).toMatchObject({ owner: 'table', status: 'deal', surprise: false });
     expect(fakeSort('pottery class', 'mine', true)).toMatchObject({ owner: 'me', status: 'active', surprise: true });
-    expect(fakeSort('pottery class', 'table', true).surprise).toBe(false);
+    // A surprise is always mine, even if Not Decided was picked before it was switched on.
+    expect(fakeSort('pottery class', 'table', true)).toMatchObject({ owner: 'me', surprise: true });
   });
 });
 
@@ -177,5 +178,36 @@ describe('stack order', () => {
   it('drops a just added card on top of the stack locally too', () => {
     const s = deckReducer(state([t('a', '2026-11-01')]), { type: 'drop', cards: [t('n', '2026-11-09')], place: 'table' });
     expect(s.cards[0].id).toBe('n');
+  });
+});
+
+describe('the add sheet', () => {
+  it('keeps a surprise on my deck whatever was picked', () => {
+    const c = fakeSort('a gift for her', 'together', true, 'week');
+    expect(c.owner).toBe('me');
+    expect(c.status).toBe('active');
+    expect(c.surprise).toBe(true);
+    expect(c.dueOn).toBeTruthy();
+  });
+
+  it('asks to do it together when Together is picked', () => {
+    const c = fakeSort('paint the balcony', 'together', false, 'later');
+    expect(c.owner).toBe('together');
+    expect(c.request).toBe('together');
+    expect(c.requestedBy).toBe('me');
+    expect(c.when).toBe('later');
+  });
+
+  it('moves a surprise reveal without moving the card', () => {
+    const s = state([card('s', { owner: 'me', status: 'active', surprise: true, dueOn: '2999-01-01' }), card('t')]);
+    const next = deckReducer(s, { type: 'postpone', id: 's' });
+    expect(next.cards[0].id).toBe('s');
+    expect(next.cards[0].dueOn).toBe('2999-01-02');
+    expect(next.cards[0].owner).toBe('me');
+  });
+
+  it('only postpones surprises', () => {
+    const s = state([card('a', { owner: 'me', status: 'active' })]);
+    expect(deckReducer(s, { type: 'postpone', id: 'a' })).toBe(s);
   });
 });

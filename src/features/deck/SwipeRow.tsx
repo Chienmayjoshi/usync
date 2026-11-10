@@ -1,6 +1,6 @@
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { haptics } from '@/theme/haptics';
@@ -36,10 +36,14 @@ type Props = {
   nudge?: { mood: Mood; line: string; recipe: MascotRecipe | null; bg: string; ink: string };
   /** A line in place of the meta: who asked what, or who this is waiting on. */
   note?: { text: string; ink: string };
+  /** The words on the swipe blocks (a surprise says REVEAL and +1 DAY). */
+  labels?: { done: string; later: string };
+  /** The left swipe changes the card without taking it off the deck: the row springs back. */
+  laterStays?: boolean;
 };
 
 /** A My Deck row: swipe right for DONE, left for LATER (back to the table). Tap for its story. */
-export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge, note }: Props) {
+export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays }: Props) {
   const t = useTheme();
   const s = useStyles();
   const tx = useSharedValue(0);
@@ -76,6 +80,12 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
       armed.set(0);
       if (right || left) {
         const dir = right ? 'done' : 'later';
+        if (!right && laterStays) {
+          // Past the line: the change is made, and the row comes home with the finger's speed.
+          scheduleOnRN(finish, dir);
+          tx.set(withSpring(0, { duration: 400, dampingRatio: 0.8, velocity: e.velocityX }));
+          return;
+        }
         scheduleOnRN(dir === 'done' ? haptics.success : haptics.tick);
         tx.set(withTiming((right ? 1 : -1) * (width.value + GAP), { duration: 200, easing: ease.out }, (done) => {
           if (!done) return;
@@ -106,13 +116,13 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
       <GestureDetector gesture={pan}>
         <View style={s.track}>
           <Animated.View style={[s.block, s.left, { backgroundColor: t.color.swipe.done }, done]}>
-            <Animated.View style={doneLabel}><Text style={s.blockText} color={t.color.swipe.ink}>DONE</Text></Animated.View>
+            <Animated.View style={doneLabel}><Text style={s.blockText} color={t.color.swipe.ink}>{labels?.done ?? 'DONE'}</Text></Animated.View>
           </Animated.View>
           <Animated.View style={[s.block, s.right, { backgroundColor: t.color.swipe.later }, later]}>
-            <Animated.View style={laterLabel}><Text style={s.blockText} color={t.color.swipe.ink}>LATER</Text></Animated.View>
+            <Animated.View style={laterLabel}><Text style={s.blockText} color={t.color.swipe.ink}>{labels?.later ?? 'LATER'}</Text></Animated.View>
           </Animated.View>
           <Animated.View style={[s.content, content]}>
-            <Pressable onPress={onOpen} style={s.row} accessibilityRole="button" accessibilityHint="Opens this task's story" accessibilityActions={swipes ? [{ name: 'done', label: 'Done' }, { name: 'later', label: 'Later, back to the table' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'done') onDone?.(); if (e.nativeEvent.actionName === 'later') onLater?.(); }}>
+            <Pressable onPress={onOpen} style={s.row} accessibilityRole="button" accessibilityHint="Opens this task's story" accessibilityActions={swipes ? [{ name: 'done', label: labels ? 'Reveal' : 'Done' }, { name: 'later', label: labels ? 'Reveal a day later' : 'Later, back to the table' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'done') onDone?.(); if (e.nativeEvent.actionName === 'later') onLater?.(); }}>
               <View style={s.icon}>
                 <Image source={sticker.src} style={{ width: sticker.w, height: sticker.h }} resizeMode="contain" />
               </View>

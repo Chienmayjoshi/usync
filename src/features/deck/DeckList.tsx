@@ -10,6 +10,8 @@ import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/line
 import { useNow } from '@/features/mascot/useNow';
 
 import type { CardAnswers } from './DealCard';
+import { revealLabel } from '@/features/drop/priority';
+
 import { type Card, forMe } from './model';
 import { SwipeRow } from './SwipeRow';
 
@@ -21,6 +23,8 @@ type Props = {
   pending?: Card[];
   onDone: (c: Card) => void;
   onLater: (c: Card) => void;
+  /** A surprise's left swipe: reveal it a day later. */
+  onPostpone: (c: Card) => void;
   onOpen: (c: Card) => void;
   answer: (c: Card) => CardAnswers | undefined;
   /** Shown when the chosen tab has nothing in it. */
@@ -35,7 +39,7 @@ const FADE_H = 263;
  * My Deck as a list (Figma 223:22064): "My Tasks" and "Doing Together", one row per task.
  * Swipe a row right to finish it, left to put it back on the table for later.
  */
-export function DeckList({ cards, pending = [], onDone, onLater, onOpen, answer, empty, bottomSpace }: Props) {
+export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, answer, empty, bottomSpace }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -80,6 +84,7 @@ export function DeckList({ cards, pending = [], onDone, onLater, onOpen, answer,
               : answers && c.request === 'together' ? `${names.partnerOr} wants to do it together`
               : answers && c.request === 'take' ? `${names.partnerOr} asked you to take it`
               : answers && c.request === 'give' ? `${names.partnerOr} asked for it`
+              : c.surprise ? `Surprise  ·  ${revealLabel(c.dueOn, now)}`
               : undefined;
             return (
               <SwipeRow
@@ -88,8 +93,10 @@ export function DeckList({ cards, pending = [], onDone, onLater, onOpen, answer,
                 first={i === 0}
                 onOpen={() => onOpen(c)}
                 onDone={waiting ? undefined : () => onDone(c)}
-                onLater={waiting || c.owner === 'together' ? undefined : () => onLater(c)}
-                note={note ? { text: note, ink } : undefined}
+                onLater={waiting || c.owner === 'together' ? undefined : c.surprise ? () => onPostpone(c) : () => onLater(c)}
+                laterStays={c.surprise}
+                labels={c.surprise ? { done: 'REVEAL', later: '+1 DAY' } : undefined}
+                note={note ? { text: note, ink: c.surprise ? t.color.accent.tag : ink } : undefined}
                 answers={answers}
                 answerLabels={answers ? labels(c) : undefined}
                 nudge={waiting || answers ? undefined : nudgeFor(c)}

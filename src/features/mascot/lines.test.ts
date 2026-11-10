@@ -113,3 +113,10 @@ describe('lines beside the title', () => {
     }
   });
 });
+
+describe('surprises', () => {
+  it('are never nudged', () => {
+    const c = { id: 's', title: 's', owner: 'me', status: 'active', surprise: true } as Card;
+    expect(nudgeKind(c)).toBeNull();
+  });
+});

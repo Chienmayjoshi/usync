@@ -120,6 +120,7 @@ export default function TableScreen() {
             pending={pendingTogether(state)}
             onDone={(c) => move(c, 'done')}
             onLater={(c) => move(c, 'table')}
+            onPostpone={(c) => move(c, 'postpone')}
             onOpen={setUpdating}
             answer={(c) => (forMe(c) ? { onAccept: () => move(c, 'accept'), onDecline: () => move(c, 'decline') } : undefined)}
             bottomSpace={pillBottom + PILL_OUTER + 24}

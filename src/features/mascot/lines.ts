@@ -21,8 +21,10 @@ export function nudgeLevelSince(since: string | undefined, now: number, cap: num
   return Math.min(level, Math.max(1, Math.min(3, cap))) as NudgeLevel;
 }
 
-/** Which cards get nudged, and as which kind: mine and together while active, Table cards nobody took. */
+/** Which cards get nudged, and as which kind: mine and together while active, Table cards nobody took; never surprises. */
 export function nudgeKind(card: Card): NudgeKind | null {
+  // Never about a surprise: the partner's mascot would be nagging me about their own surprise.
+  if (card.surprise) return null;
   if (card.status === 'active' && (card.owner === 'me' || card.owner === 'together')) return 'mine';
   if (card.status === 'deal' && card.owner === 'table' && !card.request && !card.surprise) return 'table';
   return null;

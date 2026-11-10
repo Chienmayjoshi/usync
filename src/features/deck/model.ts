@@ -3,6 +3,7 @@
 // ask my partner to take it, or ask to do it together. My partner answers requests from their
 // deck. Cards on my deck are done, sent back to the Table, or deleted.
 
+import { dueFor, postponed, type Step, whenFor } from '@/features/drop/priority';
 import { type Bucket, sortLine } from '@/lib/sorter';
 
 export type { Bucket };
@@ -36,6 +37,8 @@ export type Card = {
   requestedBy?: 'me' | 'partner' | null;
   /** Only the dropper sees it until it is done. */
   surprise?: boolean;
+  /** The date its priority stands for; for a surprise, when it gets revealed. */
+  dueOn?: string | null;
 };
 
 export type StoryCard = { id: string; title: string; when: string; together: boolean; bucket?: Bucket; doneBy?: 'me' | 'partner' | null; doneAt?: string | null };
@@ -57,12 +60,14 @@ export type DeckAction =
   | { type: 'next'; id: string }
   | { type: 'prev'; id: string }
   | { type: 'delete'; id: string }
+  /** A surprise's reveal moves by `days` (a day later, or back again on undo). */
+  | { type: 'postpone'; id: string; days?: number }
   | { type: 'drop'; cards: Card[]; place: DropPlace; surprise?: boolean }
   | { type: 'undo' }
   | { type: 'clearUndo' };
 
-/** Where a new card goes: the shared Table, or straight onto my deck. */
-export type DropPlace = 'table' | 'mine';
+/** Where a new card goes: the shared Table, straight onto my deck, or asked to do together. */
+export type DropPlace = 'table' | 'mine' | 'together';
 
 const update = (cards: Card[], id: string, patch: Partial<Card>) =>
   cards.map((c) => (c.id === id ? { ...c, ...patch, story: patch.story ?? c.story } : c));
@@ -144,6 +149,14 @@ export function deckReducer(state: DeckState, action: DeckAction): DeckState {
     }
     case 'delete':
       return { ...state, cards: state.cards.filter((x) => x.id !== c.id), undo: null };
+    case 'postpone':
+      // A surprise stays where it is on my deck; only its reveal day moves.
+      if (!c.surprise || c.status !== 'active') return state;
+      return {
+        ...state,
+        cards: update(state.cards, c.id, { dueOn: postponed(c.dueOn, Date.now(), action.days ?? 1) }),
+        undo: snapshot('Reveal moved'),
+      };
   }
 }
 
@@ -225,23 +238,27 @@ export { splitDrop } from '@/lib/sorter';
 
 let seq = 0;
 /** Local card from one line, using the free rule sorter. The backend stores the same fields. */
-export function fakeSort(raw: string, place: DropPlace = 'table', surprise = false): Card {
+export function fakeSort(raw: string, place: DropPlace = 'table', surprise = false, step?: Step, now = Date.now()): Card {
   const s = sortLine(raw);
   seq += 1;
-  const mine = place === 'mine';
+  // A surprise is always mine, whatever was picked before it was switched on.
+  const where: DropPlace = surprise ? 'mine' : place;
+  const mine = where === 'mine';
   return {
     id: `drop-${Date.now()}-${seq}`,
     title: s.title,
     bucket: s.bucket,
     effort: s.effort,
-    when: s.when,
+    when: step ? whenFor(step, raw) : s.when,
     detail: '',
-    owner: mine ? 'me' : 'table',
+    owner: mine ? 'me' : where === 'together' ? 'together' : 'table',
     status: mine ? 'active' : 'deal',
     traded: false,
     weight: s.weight,
     story: ['You added it'],
     droppedBy: 'me',
     surprise: mine && surprise,
+    dueOn: step ? dueFor(step, now) : null,
+    ...(where === 'together' ? { request: 'together' as const, requestedBy: 'me' as const } : {}),
   };
 }
