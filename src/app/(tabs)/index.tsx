@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { DeckList } from '@/features/deck/DeckList';
 import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
 import { type Card, byWhen, deckCards, pendingTogether, tableCards, type When } from '@/features/deck/model';
+import { useFocus } from '@/features/deck/focus';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
 import { MOOD_FOR, nudgeLevel } from '@/features/mascot/lines';
@@ -48,6 +49,26 @@ export default function TableScreen() {
   // My Deck is a peek from the Table, not a place: leaving the tab closes it, so coming back
   // always lands on the stack. Closed instantly, as the screen is out of sight by then.
   useFocusEffect(useCallback(() => () => { open.set(0); setExpanded(false); }, [open]));
+  // Sent here from Activity or a push: bring that card into view (the Table's front, or My Deck).
+  const { focus, clear } = useFocus();
+  const [focusId, setFocusId] = useState<string | undefined>();
+  useEffect(() => {
+    if (!focus || focus.place === 'partner') return;
+    // After this screen has come into view (the tab switch happens in the same tap).
+    const go = setTimeout(() => {
+      if (focus.place === 'table') {
+        setTableWhen('all');
+        open.set(withTiming(0, motion.panel));
+        setExpanded(false);
+      } else {
+        open.set(withTiming(1, motion.panel));
+        setExpanded(true);
+      }
+      setFocusId(focus.id ? `${focus.id}@${focus.at}` : undefined);
+      clear();
+    }, 0);
+    return () => clearTimeout(go);
+  }, [focus, clear, open]);
   const toggle = () => {
     open.set(withTiming(expanded ? 0 : 1, motion.panel));
     setExpanded(!expanded);
@@ -94,6 +115,7 @@ export default function TableScreen() {
         {!ready ? null : tableShown.length ? (
           <CardStack
             cards={tableShown}
+            focusId={expanded ? undefined : focusId}
             actions={solo ? {
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
             } : {
@@ -118,6 +140,7 @@ export default function TableScreen() {
           <DeckList
             cards={deck}
             pending={pendingTogether(state)}
+            focusId={expanded ? focusId : undefined}
             onDone={(c) => move(c, 'done')}
             onLater={(c) => move(c, 'table')}
             onPostpone={(c) => move(c, 'postpone')}

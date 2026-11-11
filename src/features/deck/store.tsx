@@ -7,6 +7,8 @@ import { type EventRow, errorText, type Side, supabase, type TaskRow, type Thank
 import { haptics } from '@/theme/haptics';
 import { useToast } from '@/ui/Toast';
 
+import type { Reaction } from '@/features/thanks/reactions';
+
 import { arrange, type Card, type DeckAction, deckReducer, type DeckState, type DropPlace, type Owner, type StoryCard } from './model';
 
 // The deck lives in Supabase. Moves apply locally first (so swipes feel instant), then the
@@ -21,6 +23,12 @@ type Deck = {
   resume: (id: string) => Promise<void>;
   /** Task ids I already sent a heart for. */
   thanked: Set<string>;
+  /** What I sent for each card I appreciated (0010). */
+  reacted: Map<string, Reaction>;
+  /** Appreciate a finished card: the first time adds my reaction, after that changes it. */
+  react: (id: string, reaction: Reaction, note?: string) => Promise<void>;
+  /** Undo a reaction the partner has not opened yet. */
+  retract: (id: string) => Promise<void>;
   sendThanks: (id: string, note?: string) => Promise<void>;
   /** Hearts from my partner I have not acknowledged yet, oldest first. */
   hearts: ThanksRow[];
@@ -67,7 +75,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [state, setState] = useState<DeckState>(empty);
   const [ready, setReady] = useState(false);
-  const [thanked, setThanked] = useState<Set<string>>(new Set());
+  const [reacted, setReacted] = useState<Map<string, Reaction>>(new Map());
+  const thanked = useMemo(() => new Set(reacted.keys()), [reacted]);
   const [hearts, setHearts] = useState<ThanksRow[]>([]);
   const [heartFor, askHeart] = useState<Card | null>(null);
   const stateRef = useRef<DeckState>(empty);
@@ -85,14 +94,14 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     const [t, e, th] = await Promise.all([
       supabase.from('tasks').select('*').order('sort_at', { ascending: true }),
       supabase.from('task_events').select('id, task_id, actor, kind, text, at').order('at', { ascending: true }),
-      supabase.from('thanks').select('id, task_id, from_member, note, seen_at, at').order('at', { ascending: true }),
+      supabase.from('thanks').select('*').order('at', { ascending: true }),
     ]);
     if (t.error) throw t.error;
     if (e.error) throw e.error;
     const r = t.data as TaskRow[];
     setRows(r);
     const all = (th.data ?? []) as ThanksRow[];
-    setThanked(new Set(all.filter((x) => x.from_member === myId && x.task_id).map((x) => x.task_id as string)));
+    setReacted(new Map(all.filter((x) => x.from_member === myId && x.task_id).map((x) => [x.task_id as string, x.reaction ?? 'heart'])));
     setHearts(all.filter((x) => x.from_member !== myId && !x.seen_at));
     setState((s) => {
       const next = toState(r, e.data as EventRow[], side, myId);
@@ -127,6 +136,12 @@ export function DeckProvider({ children }: { children: ReactNode }) {
         if (row.from_member === myId) return;
         haptics.success();
         setHearts((h) => (h.some((x) => x.id === row.id) ? h : [...h, row]));
+      })
+      // They changed what they sent before I opened it: the moment shows the new one.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'thanks', filter: `couple_id=eq.${coupleId}` }, (p) => {
+        const row = p.new as ThanksRow;
+        if (row.from_member === myId || row.seen_at) return;
+        setHearts((h) => (h.some((x) => x.id === row.id) ? h.map((x) => (x.id === row.id ? row : x)) : [...h, row]));
       })
       .subscribe();
 
@@ -250,13 +265,24 @@ export function DeckProvider({ children }: { children: ReactNode }) {
     await load();
   }, [load]);
 
-  const sendThanks = useCallback(async (id: string, note?: string) => {
+  const react = useCallback(async (id: string, reaction: Reaction, note?: string) => {
     if (!me?.couple_id) return;
-    setThanked((s) => new Set(s).add(id));
-    const { error } = await supabase.from('thanks').insert({ couple_id: me.couple_id, task_id: id, from_member: me.id, note: note?.trim() || null });
-    // A second tap on another phone is fine: one heart per job is enforced by the database.
-    if (error && error.code !== '23505') throw error;
-  }, [me]);
+    const before = reacted.get(id);
+    setReacted((m) => new Map(m).set(id, reaction));
+    const { error } = await supabase.rpc('react', { task: id, reaction, note: note?.trim() || null });
+    if (error) {
+      setReacted((m) => { const n = new Map(m); if (before) n.set(id, before); else n.delete(id); return n; });
+      throw error;
+    }
+  }, [me, reacted]);
+
+  const retract = useCallback(async (id: string) => {
+    setReacted((m) => { const n = new Map(m); n.delete(id); return n; });
+    const { error } = await supabase.rpc('retract_reaction', { task: id });
+    if (error) { load().catch(() => undefined); throw error; }
+  }, [load]);
+
+  const sendThanks = useCallback((id: string, note?: string) => react(id, 'heart', note), [react]);
 
   const ackHeart = useCallback((id: number) => {
     setHearts((h) => h.filter((x) => x.id !== id));
@@ -264,8 +290,8 @@ export function DeckProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor, askHeart }),
-    [state, dispatch, ready, addUpdate, resume, thanked, sendThanks, hearts, ackHeart, heartFor],
+    () => ({ state, dispatch, ready, addUpdate, resume, thanked, reacted, react, retract, sendThanks, hearts, ackHeart, heartFor, askHeart }),
+    [state, dispatch, ready, addUpdate, resume, thanked, reacted, react, retract, sendThanks, hearts, ackHeart, heartFor],
   );
   return (
     <Ctx.Provider value={value}>

@@ -9,6 +9,8 @@ import { MOOD_FOR, type NudgeLevel } from '@/features/mascot/lines';
 import { Mascot } from '@/features/mascot/Mascot';
 import { type PushKind, registerForPush } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
+import { useFocus } from '@/features/deck/focus';
+import type { ActivityData } from '@/features/notify/where';
 import { useTheme } from '@/theme/ThemeProvider';
 import { useToast } from '@/ui/Toast';
 
@@ -92,10 +94,16 @@ export function NotificationsBridge() {
 /** Opening a push lands on the tab it is about. Native only: web has no notification responses. */
 function TapRouter() {
   const tapped = Notifications.useLastNotificationResponse();
+  const { open } = useFocus();
+  const handled = useRef<string | null>(null);
   useEffect(() => {
-    if (tapped && tapped.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
-      router.navigate(routeFor(tapped.notification.request.content.data?.kind));
-    }
-  }, [tapped]);
+    if (!tapped || tapped.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+    const id = tapped.notification.request.identifier;
+    if (handled.current === id) return;
+    handled.current = id;
+    // The same map as the Activity rows: land where the card lives now, with it in focus.
+    const data = tapped.notification.request.content.data as ActivityData & { kind?: string } | undefined;
+    if (!open(String(data?.kind ?? ''), data)) router.navigate(routeFor(data?.kind));
+  }, [tapped, open]);
   return null;
 }

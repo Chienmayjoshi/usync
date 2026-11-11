@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
@@ -32,6 +32,8 @@ type Props = {
   onDecline: (c: Card) => void;
   /** Every card, for the deck mascot's rare good day (cards finished today). */
   all: Card[];
+  /** A card to bring into view ("id@time"), when sent here from Activity or a push. */
+  focusId?: string;
   /** Shown when the chosen tab has nothing in it. */
   empty: ReactNode;
   /** Room to leave under the last row for the pill and the nav. */
@@ -44,11 +46,29 @@ const FADE_H = 263;
  * My Deck as a list (Figma 223:22064): "My Tasks" and "Doing Together", one row per task.
  * Swipe a row right to finish it, left to put it back on the table for later.
  */
-export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, onAccept, onDecline, all, empty, bottomSpace }: Props) {
+export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, onAccept, onDecline, all, focusId, empty, bottomSpace }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
   const [tab, setTab] = useState<Tab>('mine');
+  const scroll = useRef<{ scrollTo: (o: { y: number; animated: boolean }) => void } | null>(null);
+  const rowY = useRef(new Map<string, number>());
+  const [lit, setLit] = useState<string | null>(null);
+  // Sent here for one card: open its tab, scroll to it, and light it up once.
+  useEffect(() => {
+    const id = focusId?.split('@')[0];
+    const c = id ? cards.find((x) => x.id === id) ?? pending.find((x) => x.id === id) : undefined;
+    if (!c || forMe(c)) return;
+    const pick = setTimeout(() => setTab(c.owner === 'together' ? 'together' : 'mine'), 0);
+    const go = setTimeout(() => {
+      const y = rowY.current.get(c.id);
+      if (y != null) scroll.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+      setLit(focusId ?? null);
+    }, 320);
+    return () => { clearTimeout(pick); clearTimeout(go); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
+  const litId = lit?.split('@')[0];
   // Asks are decisions, not work: they leave the list for the pinned card above it.
   const asks = cards.filter(forMe);
   const work = cards.filter((c) => !forMe(c));
@@ -77,7 +97,7 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
   return (
     <View style={s.fill}>
       {asks.length ? (
-        <AskCard asks={asks} onAccept={onAccept} onDecline={onDecline} />
+        <AskCard asks={focused(asks, focusId)} onAccept={onAccept} onDecline={onDecline} />
       ) : showMascot ? (
         <DeckMascot mood={mood} onOpen={onOpen} />
       ) : null}
@@ -89,7 +109,7 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
         options={[{ value: 'mine', label: 'My Tasks', count: mine.length }, { value: 'together', label: 'Doing Together', count: together.length }]}
       />
       {shown.length ? (
-        <ScrollView style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator>
+        <ScrollView ref={scroll as never} style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator>
           {shown.map((c, i) => {
             const waiting = pending.includes(c);
             const ink = t.tones[names.colors.partner].ink;
@@ -98,8 +118,9 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
               : c.surprise ? `Surprise  ·  ${revealLabel(c.dueOn, now)}`
               : undefined;
             return (
+              <View key={c.id} onLayout={(e) => rowY.current.set(c.id, e.nativeEvent.layout.y)}>
               <SwipeRow
-                key={c.id}
+                lit={litId === c.id ? lit : null}
                 card={c}
                 first={i === 0}
                 onOpen={() => onOpen(c)}
@@ -110,6 +131,7 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
                 note={note ? { text: note, ink: c.surprise ? t.color.accent.tag : ink } : undefined}
                 nudge={waiting || (!asks.length && c.id === mood.card?.id) ? undefined : nudgeFor(c)}
               />
+              </View>
             );
           })}
         </ScrollView>
@@ -140,3 +162,10 @@ const useStyles = makeStyles(() => ({
   empty: { paddingTop: 40 },
   fade: { position: 'absolute', left: -20, right: -20, bottom: 0 },
 }));
+
+/** The ask a tap was about goes first in the pinned stack. */
+function focused(asks: Card[], focusId?: string) {
+  const id = focusId?.split('@')[0];
+  const i = id ? asks.findIndex((a) => a.id === id) : -1;
+  return i > 0 ? [asks[i], ...asks.slice(0, i), ...asks.slice(i + 1)] : asks;
+}

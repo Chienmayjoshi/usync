@@ -55,7 +55,11 @@ export type TaskRow = {
   created_at: string;
 };
 
-export type ThanksRow = { id: number; task_id: string | null; from_member: string; note: string | null; seen_at: string | null; at: string };
+export type ThanksRow = {
+  id: number; task_id: string | null; from_member: string; note: string | null; seen_at: string | null; at: string;
+  /** What was sent (0010); absent before it, which reads as a heart. */
+  reaction?: 'heart' | 'care' | 'laugh' | 'wow' | 'tears';
+};
 
 export type EventRow = { id: number; task_id: string; actor: string | null; kind: string; text: string; at: string };
 

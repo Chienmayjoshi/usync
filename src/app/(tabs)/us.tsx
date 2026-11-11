@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { HeaderAvatars } from '@/features/account/HeaderAvatars';
 import { useNames } from '@/features/account/account';
 import { Row } from '@/features/deck/CardList';
 import { type Card, partnerDeck, togetherCards, waitingCards } from '@/features/deck/model';
+import { useFocus } from '@/features/deck/focus';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
@@ -23,6 +24,15 @@ export default function PartnerScreen() {
   const names = useNames();
   const move = useMoves();
   const [updating, setUpdating] = useState<Card | null>(null);
+  // Sent here for one of her cards (Activity, a push): its row lights up once.
+  const { focus, clear } = useFocus();
+  const [lit, setLit] = useState<string | null>(null);
+  useEffect(() => {
+    if (focus?.place !== 'partner') return;
+    const go = setTimeout(() => { setLit(`${focus.id}@${focus.at}`); clear(); }, 250);
+    return () => clearTimeout(go);
+  }, [focus, clear]);
+  const litId = lit?.split('@')[0];
   // Looking through their deck is private: the stack scrolls locally, their pile never reorders.
   const ranked = partnerDeck(state);
   const together = togetherCards(state);
@@ -36,7 +46,7 @@ export default function PartnerScreen() {
       ) : !ready ? null : ranked.length ? (
         // A glance, not a decision: her deck as rows. Tap one for its story and "Ask for this".
         <Section label={`On ${them}’s deck  ·  ${ranked.length}`}>
-          {ranked.map((c) => <Row key={c.id} card={c} onPress={() => setUpdating(c)} />)}
+          {ranked.map((c) => <Row key={c.id} card={c} lit={litId === c.id ? lit : null} onPress={() => setUpdating(c)} />)}
         </Section>
       ) : (
         <View style={s.empty}>
@@ -47,7 +57,7 @@ export default function PartnerScreen() {
 
       {together.length > 0 && (
         <Section label="Doing together">
-          {together.map((c) => <Row key={c.id} card={c} onPress={() => setUpdating(c)} />)}
+          {together.map((c) => <Row key={c.id} card={c} lit={litId === c.id ? lit : null} onPress={() => setUpdating(c)} />)}
         </Section>
       )}
       {waiting.length > 0 && (

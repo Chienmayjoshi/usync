@@ -4,7 +4,10 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { useAccount } from '@/features/account/account';
 import { supabase } from '@/lib/supabase';
 
-export type ActivityItem = { id: number; kind: string; title: string; body: string; created_at: string };
+import type { ActivityItem } from './where';
+
+export type { ActivityItem };
+
 
 const SEEN_KEY = 'usync.activity.seen';
 
@@ -24,7 +27,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const { data } = await supabase.from('push_outbox').select('id, kind, title, body, created_at').order('created_at', { ascending: false }).limit(60);
+    const { data } = await supabase.from('push_outbox').select('id, kind, title, body, created_at, data').order('created_at', { ascending: false }).limit(60);
     setItems((data ?? []) as ActivityItem[]);
   }, [id]);
 

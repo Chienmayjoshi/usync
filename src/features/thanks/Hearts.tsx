@@ -17,6 +17,8 @@ import { Sheet, type SheetHandle } from '@/ui/Sheet';
 import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
+import { reactionLine, reactionOf } from './reactions';
+
 /** Both halves of thanks: receiving one (full screen, stays until read) and sending one. */
 export function Hearts() {
   const { me } = useAccount();
@@ -59,11 +61,14 @@ function HeartMoment() {
         </View>
         <Text variant="display/xl" style={styles.text}>Thank you!</Text>
         <View style={styles.center}>
-          <Animated.View entering={ZoomIn.duration(320).easing(ease.out)} style={pulse}>
-            <Image source={require('@/../assets/illustrations/heart.png')} style={{ width: 198, height: 200 }} resizeMode="contain" />
+          <Animated.View key={heart.reaction ?? 'heart'} entering={ZoomIn.duration(320).easing(ease.out)} style={pulse}>
+            {/* A heart keeps its illustration; the other four are the emoji, this big (Figma 295:7524). */}
+            {(heart.reaction ?? 'heart') === 'heart'
+              ? <Image source={require('@/../assets/illustrations/heart.png')} style={{ width: 198, height: 200 }} resizeMode="contain" />
+              : <Text style={styles.big} maxFontSizeMultiplier={1}>{reactionOf(heart.reaction).emoji}</Text>}
           </Animated.View>
           <Animated.View entering={FadeIn.delay(200)} style={styles.copy}>
-            <Text variant="label/md" color={t.color.text.secondary}>{`${from} sent you a heart`}</Text>
+            <Text variant="label/md" color={t.color.text.secondary}>{reactionLine(heart.reaction, from).replace(/\s\S+$/u, '')}</Text>
             {card && <Text variant="title/md" style={styles.text}>{`for “${card.title}”`}</Text>}
             {heart.note ? (
               <Text variant="display/accent" color={t.color.text.secondary} style={[styles.text, styles.note]}>{`“${heart.note}”`}</Text>
@@ -74,7 +79,7 @@ function HeartMoment() {
         </View>
         <View style={styles.actions}>
           {hearts.length > 1 && <Text variant="caption" color={t.color.text.muted} style={styles.text}>{`${hearts.length - 1} more waiting`}</Text>}
-          <PopButton label={hearts.length > 1 ? 'Next heart' : 'Got it'} tone="primary" onPress={() => { haptics.take(); ackHeart(heart.id); }} />
+          <PopButton label={hearts.length > 1 ? 'Next' : 'Got it'} tone="primary" onPress={() => { haptics.take(); ackHeart(heart.id); }} />
         </View>
       </View>
     </Modal>
@@ -87,10 +92,15 @@ function SendHeartHost() {
   return <SendHeart key={heartFor.id} card={heartFor} onClose={() => askHeart(null)} />;
 }
 
-/** One tap heart, with an optional line. Any day of the week, not only at Sunday Sync. */
+/**
+ * Appreciate with a line: from the "she finished it" banner (a heart), or "Add a line" after a
+ * reaction (keeps the reaction already sent and adds the line to it).
+ */
 function SendHeart({ card, onClose }: { card: Card; onClose: () => void }) {
   const t = useTheme();
-  const { sendThanks } = useDeck();
+  const { react, reacted } = useDeck();
+  const current = reacted.get(card.id);
+  const r = reactionOf(current);
   const names = useNames();
   const toast = useToast();
   const [note, setNote] = useState('');
@@ -99,9 +109,9 @@ function SendHeart({ card, onClose }: { card: Card; onClose: () => void }) {
   const send = async () => {
     setBusy(true);
     try {
-      await sendThanks(card.id, note);
+      await react(card.id, current ?? 'heart', note);
       haptics.success();
-      toast({ kind: 'thanks', title: 'Heart sent', body: `${names.partnerOr} will see it the next time they open usync.`, ms: 3500 });
+      toast({ kind: 'thanks', title: current ? 'Line added' : 'Heart sent', body: `${names.partnerOr} will see it the next time they open usync.`, ms: 3500 });
       sheet.current?.close();
     } catch (e) {
       toast({ kind: 'info', title: 'That didn’t send', body: errorText(e) });
@@ -113,7 +123,7 @@ function SendHeart({ card, onClose }: { card: Card; onClose: () => void }) {
       <Text variant="label/md" color={t.color.accent.heart}>{`Thank ${names.partnerOr}`}</Text>
       <Text variant="display/md">{card.title}</Text>
       <Field label="Add a line (optional)" value={note} onChangeText={setNote} placeholder="Light’s back. You’re a star." maxLength={200} />
-      <PopButton label={busy ? 'Sending…' : 'Send a heart'} tone="negative" disabled={busy} onPress={send} />
+      <PopButton label={busy ? 'Sending…' : current ? `Send with ${r.emoji}` : 'Send a heart'} tone="negative" disabled={busy || (!!current && !note.trim())} onPress={send} />
     </Sheet>
   );
 }
@@ -125,5 +135,6 @@ const useStyles = makeStyles((t) => ({
   copy: { alignItems: 'center', gap: 12 },
   text: { textAlign: 'center' },
   note: { fontSize: 18, lineHeight: 26 },
+  big: { fontSize: 150, lineHeight: 180, textAlign: 'center' },
   actions: { gap: 10 },
 }));

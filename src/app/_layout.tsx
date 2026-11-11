@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AccountProvider, useAccount } from '@/features/account/account';
+import { FocusProvider } from '@/features/deck/focus';
 import { DeckProvider } from '@/features/deck/store';
 import { ActivityProvider } from '@/features/notify/activity';
 import { NotificationsBridge } from '@/features/notify/NotificationsBridge';
@@ -50,12 +51,14 @@ function Root() {
         <ToastHost>
           <AccountProvider>
             <DeckProvider>
+              <FocusProvider>
               <ActivityProvider>
                 <StatusBar style={t.scheme === 'dark' ? 'light' : 'dark'} />
                 <Routes />
                 <NotificationsBridge />
                 <Hearts />
               </ActivityProvider>
+              </FocusProvider>
             </DeckProvider>
           </AccountProvider>
         </ToastHost>

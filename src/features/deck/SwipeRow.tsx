@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
-import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { useNames } from '@/features/account/account';
 import { haptics } from '@/theme/haptics';
 import { ease, motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
@@ -39,11 +41,14 @@ type Props = {
   labels?: { done: string; later: string };
   /** The left swipe changes the card without taking it off the deck: the row springs back. */
   laterStays?: boolean;
+  /** Set (to a fresh key) when this row was asked for: it lights up once, "here it is". */
+  lit?: string | null;
 };
 
 /** A My Deck row: swipe right for DONE, left for LATER (back to the table). Tap for its story. */
-export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays }: Props) {
+export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays, lit }: Props) {
   const t = useTheme();
+  const names = useNames();
   const s = useStyles();
   const tx = useSharedValue(0);
   const width = useSharedValue(350);
@@ -96,6 +101,14 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
     },
   });
 
+  // A one time "here it is": the row glows and fades out over most of a second (ease-out, no loop).
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    if (!lit) return;
+    glow.set(1);
+    glow.set(withDelay(250, withTiming(0, { duration: 900, easing: ease.out })));
+  }, [lit, glow]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.get() * 0.55 }));
   const box = useAnimatedStyle(() => ({ height: ROW_H * height.value, opacity: height.value }));
   // The row gives way to the block: its text narrows and ellipsizes, as in Figma, rather than sliding off.
   const content = useAnimatedStyle(() => ({ left: Math.max(0, tx.value), right: Math.max(0, -tx.value) }));
@@ -144,12 +157,15 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
           </Animated.View>
         </View>
       </GestureDetector>
+      {/* Over the row, see-through: the light passes over it without hiding the words. */}
+      <Animated.View pointerEvents="none" style={[s.glow, { backgroundColor: t.tones[names.colors.partner].glow[0] }, glowStyle]} />
     </Animated.View>
   );
 }
 
 const useStyles = makeStyles(() => ({
   item: { overflow: 'hidden' },
+  glow: { position: 'absolute', left: -8, right: -8, top: 4, bottom: 4, borderRadius: 14 },
   line: { height: 1 },
   track: { flex: 1, justifyContent: 'center' },
   block: { position: 'absolute', top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },

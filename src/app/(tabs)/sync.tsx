@@ -1,4 +1,3 @@
-import { Heart } from 'phosphor-react-native';
 import { useRef, useState } from 'react';
 import { Image, Pressable, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -7,6 +6,7 @@ import { HeaderAvatars } from '@/features/account/HeaderAvatars';
 import { useNames } from '@/features/account/account';
 import { balanceTilt, type Card, partnerDeck } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
+import { Appreciate } from '@/features/thanks/Appreciate';
 import { useSync } from '@/features/sync/sync';
 import { Legend, MonthCard, type WeekBar } from '@/features/sync/WeekBars';
 import { weekStart } from '@/features/sync/weeks';
@@ -57,7 +57,7 @@ export default function SyncScreen() {
 function Thanks() {
   const t = useTheme();
   const s = useStyles();
-  const { state, thanked, askHeart } = useDeck();
+  const { state } = useDeck();
   const names = useNames();
   const sync = useSync();
   const [writing, setWriting] = useState(false);
@@ -73,7 +73,7 @@ function Thanks() {
     <>
       <Text variant="label/md" color={t.color.text.secondary}>{`${them} got these done this week`}</Text>
       {done.length === 0 && <Text variant="body/md" color={t.color.text.secondary}>Nothing closed yet this week. That counts as a week too.</Text>}
-      {done.map((c) => <DoneRow key={c.id} card={c} sent={thanked.has(c.id)} onSend={() => { haptics.tick(); askHeart(c); }} />)}
+      {done.map((c) => <DoneRow key={c.id} card={c} />)}
 
       <View style={s.note}>
         <Image source={require('@/../assets/illustrations/envelope.png')} style={s.envelope} resizeMode="contain" />
@@ -100,20 +100,13 @@ function Thanks() {
   );
 }
 
-function DoneRow({ card, sent, onSend }: { card: Card; sent: boolean; onSend: () => void }) {
-  const t = useTheme();
+/** A card they finished this week: tap Appreciate for a heart, hold for the other four (Figma 295:7427). */
+function DoneRow({ card }: { card: Card }) {
   const s = useStyles();
   return (
     <View style={s.row}>
       <Text variant="title/md" style={s.flex}>{card.title}</Text>
-      {sent ? (
-        <View style={s.sent}><Heart size={14} weight="fill" color={t.color.accent.heart} /><Text variant="caption" color={t.color.text.secondary}>Sent</Text></View>
-      ) : (
-        <Pressable onPress={onSend} style={s.send} accessibilityRole="button" accessibilityLabel={`Send a heart for ${card.title}`}>
-          <Text variant="button" color={t.color.text.onColor}>Send</Text>
-          <Heart size={18} weight="fill" color={t.color.accent.heart} />
-        </Pressable>
-      )}
+      <Appreciate card={card} align="right" withNote={false} />
     </View>
   );
 }

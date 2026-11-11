@@ -1,7 +1,10 @@
 import { CaretRight } from 'phosphor-react-native';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 import { useNames } from '@/features/account/account';
+import { ease } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { Text } from '@/ui/Text';
 
@@ -30,12 +33,19 @@ export function CardList({ groups, onOpen, footer }: { groups: Group[]; onOpen: 
   );
 }
 
-export function Row({ card, onPress }: { card: Card; onPress: () => void }) {
+export function Row({ card, onPress, lit }: { card: Card; onPress: () => void; /** A fresh key when this row was asked for: it lights up once. */ lit?: string | null }) {
   const names = useNames();
   const t = useTheme();
   const styles = useStyles();
   const tone = t.tones[toneFor(card, names.colors)];
   const meta = [card.bucket, card.effort, card.when].join('  ·  ');
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    if (!lit) return;
+    glow.set(1);
+    glow.set(withDelay(250, withTiming(0, { duration: 900, easing: ease.out })));
+  }, [lit, glow]);
+  const glowStyle = useAnimatedStyle(() => ({ opacity: glow.get() * 0.6 }));
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]} accessibilityRole="button" accessibilityHint="Opens what you can do with this card">
       <View style={[styles.bar, { backgroundColor: tone.accent }]} />
@@ -47,6 +57,7 @@ export function Row({ card, onPress }: { card: Card; onPress: () => void }) {
         {card.request === 'give' && card.requestedBy === 'me' && <Text variant="label/md" color={t.color.accent.tag}>You asked for it</Text>}
       </View>
       <CaretRight size={18} color={t.color.text.muted} />
+      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: t.tones[names.colors.partner].glow[0] }, glowStyle]} />
     </Pressable>
   );
 }

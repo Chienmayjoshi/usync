@@ -82,6 +82,8 @@ type Props = {
   footer?: (card: Card) => ReactNode;
   /** Where the stack sits: the cards waiting behind take that surface's shades. */
   surface?: 'table' | 'drawer';
+  /** A card to bring to the front ("id@time"), when sent here from Activity or a push. */
+  focusId?: string;
 };
 
 const THRESHOLD = 110;
@@ -136,7 +138,7 @@ const PICK = 4;
  * slides `head` one place; nothing is reordered, so there is nothing to snap back and no flicker.
  * Sideways swipes run `actions`; press, then drag, carries the top card into `drop`.
  */
-export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, surface = 'table' }: Props) {
+export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, surface = 'table', focusId }: Props) {
   const s = useStyles();
   const n = cards.length;
   const step = motion.stackScroll;
@@ -207,6 +209,16 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     for (const c of cards) seen.current.add(c.id);
     if (fresh && fresh.id !== at.id) setAt({ H: at.H, id: fresh.id, idx: cards.indexOf(fresh) });
   }, [cards, at.H, at.id]);
+
+  // Sent here for one card (Activity, a push): it comes to the front, dealt in like a new one.
+  // focusId is "id@time", so asking for the same card twice still works.
+  const [askedFor, setAskedFor] = useState(focusId);
+  if (focusId !== askedFor) {
+    setAskedFor(focusId);
+    const id = focusId?.split('@')[0];
+    const i = id ? cards.findIndex((c) => c.id === id) : -1;
+    if (i >= 0 && cards[i].id !== at.id) setAt({ H: at.H, id: cards[i].id, idx: i });
+  }
 
   // A new front card that did not arrive by a scroll or swipe (deleted, answered, added): deal it in.
   const shown = useRef<{ id?: string; H: number }>({ H: at.H });
