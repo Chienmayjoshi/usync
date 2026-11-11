@@ -16,8 +16,8 @@ import { type Reaction, REACTIONS, reactionOf } from './reactions';
 
 /**
  * Appreciate a finished card (Figma 299:25101). Tap it and the four open in its place, with a
- * cross to close; tap one to send it. Once sent it reads "❤️ Appreciated", and a tap opens the
- * four again to change it. Plain taps only: nothing to hold, nothing to slide.
+ * cross to close; tap one to send it.
+ * Once sent it is a plain "❤️ Appreciation sent" label, no longer tappable. Plain taps only.
  */
 export function Appreciate({ card }: { card: Card }) {
   const t = useTheme();
@@ -30,7 +30,6 @@ export function Appreciate({ card }: { card: Card }) {
 
   const send = (key: Reaction) => {
     setOpen(false);
-    if (key === sent) return;
     haptics.success();
     const r = reactionOf(key);
     react(card.id, key)
@@ -52,8 +51,7 @@ export function Appreciate({ card }: { card: Card }) {
           // Each arrives a beat after the one before, from the cross outwards.
           <Animated.View key={r.key} entering={FadeIn.duration(160).delay(30 + i * 30)}>
             <Pressable onPress={() => send(r.key)} hitSlop={4} accessibilityRole="button" accessibilityLabel={`Send ${r.label}`}
-              accessibilityState={{ selected: sent === r.key }}
-              style={({ pressed }) => [s.circle, sent === r.key && s.circleOn, pressed && s.pressed]}>
+              style={({ pressed }) => [s.circle, pressed && s.pressed]}>
               <Text style={s.emoji} maxFontSizeMultiplier={1}>{r.emoji}</Text>
             </Pressable>
           </Animated.View>
@@ -62,15 +60,23 @@ export function Appreciate({ card }: { card: Card }) {
     );
   }
 
-  const mine = sent ? reactionOf(sent) : null;
+  // Sent: a plain label, not a button. It's done; the toast's Undo is the only way back.
+  if (sent) {
+    const mine = reactionOf(sent);
+    return (
+      <View style={s.sent} accessible accessibilityLabel={`${mine.label} sent`}>
+        <Text style={s.sentEmoji} maxFontSizeMultiplier={1}>{mine.emoji}</Text>
+        <Text style={s.label} color={t.color.text.secondary}>Appreciation sent</Text>
+      </View>
+    );
+  }
+
   return (
     <Pressable onPress={() => { haptics.tick(); setOpen(true); }} hitSlop={4} accessibilityRole="button"
-      accessibilityLabel={mine ? `You sent ${mine.label}. Tap to change it` : `Appreciate ${card.title}`}
+      accessibilityLabel={`Appreciate ${card.title}`}
       style={({ pressed }) => [s.button, pressed && s.pressed]}>
-      {mine
-        ? <Text style={s.emoji} maxFontSizeMultiplier={1}>{mine.emoji}</Text>
-        : <Smiley size={24} color={t.color.accent.tag} />}
-      <Text style={s.label} color={t.color.accent.tag}>{mine ? 'Appreciated' : 'Appreciate'}</Text>
+      <Smiley size={24} color={t.color.accent.tag} />
+      <Text style={s.label} color={t.color.accent.tag}>Appreciate</Text>
     </Pressable>
   );
 }
@@ -89,7 +95,8 @@ const useStyles = makeStyles((t) => ({
     width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: t.scheme === 'light' ? '#D3D3D3' : t.color.border.strong, backgroundColor: t.color.bg.raised,
   },
-  circleOn: { borderColor: t.scheme === 'light' ? '#ABDBBE' : '#2C5A3D', borderWidth: 2 },
-  emoji: { fontSize: 22, lineHeight: 28, includeFontPadding: false, textAlign: 'center' },
+  sent: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
+  sentEmoji: { fontSize: 18, lineHeight: 22, includeFontPadding: false },
+  emoji:{ fontSize: 22, lineHeight: 28, includeFontPadding: false, textAlign: 'center' },
   pressed: { transform: [{ scale: 0.94 }] },
 }));
