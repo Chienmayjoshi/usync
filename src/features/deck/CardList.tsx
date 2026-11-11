@@ -37,7 +37,7 @@ export function Row({ card, onPress, lit }: { card: Card; onPress: () => void; /
   const names = useNames();
   const t = useTheme();
   const styles = useStyles();
-  const tone = t.tones[toneFor(card, names.colors)];
+  const tone = t.tones[toneFor(card)];
   const meta = [card.bucket, card.effort, card.when].join('  ·  ');
   const glow = useSharedValue(0);
   useEffect(() => {
@@ -47,8 +47,7 @@ export function Row({ card, onPress, lit }: { card: Card; onPress: () => void; /
   }, [lit, glow]);
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.get() * 0.6 }));
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.pressed]} accessibilityRole="button" accessibilityHint="Opens what you can do with this card">
-      <View style={[styles.bar, { backgroundColor: tone.accent }]} />
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, { backgroundColor: tone.wash }, pressed && styles.pressed]} accessibilityRole="button" accessibilityHint="Opens what you can do with this card">
       <View style={styles.copy}>
         <Text variant="title/md">{card.title}</Text>
         <Text variant="caption" color={t.color.text.secondary}>{meta}</Text>
@@ -67,8 +66,7 @@ const useStyles = makeStyles((t) => ({
   body: { gap: 20, paddingBottom: 120 },
   group: { gap: 8 },
   groupHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, paddingVertical: 14, paddingLeft: 14, paddingRight: 14, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: t.radius.md, paddingVertical: 14, paddingLeft: 14, paddingRight: 14, overflow: 'hidden' },
   pressed: { opacity: 0.7 },
-  bar: { width: 10, height: 10, borderRadius: 5 },
   copy: { flex: 1, gap: 3 },
 }));

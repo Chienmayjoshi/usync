@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withDelay, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -15,12 +15,14 @@ import { PopButton } from '@/ui/PopButton';
 import { Text } from '@/ui/Text';
 
 import type { CardAnswers } from './DealCard';
+import { toneFor } from './taskTone';
 import type { Card } from './model';
 
 // Figma 232:22739: rows are 8 + 48.9 + 8 tall with 4 above and below to the hairline; the swipe
 // block fills that whole 72 (239:22885). Content sits 12 past the block's edge.
 export const ROW_H = 72.9;
 const GAP = 12;
+const PANEL_INSET = 4;
 /** Past this share of the row the swipe commits (the block widens to take the row). */
 const COMMIT = 0.45;
 const FLING = 800;
@@ -46,7 +48,7 @@ type Props = {
 };
 
 /** A My Deck row: swipe right for DONE, left for LATER (back to the table). Tap for its story. */
-export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays, lit }: Props) {
+export function SwipeRow({ card, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays, lit }: Props) {
   const t = useTheme();
   const names = useNames();
   const s = useStyles();
@@ -124,7 +126,6 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
 
   return (
     <Animated.View style={[s.item, box]} onLayout={(e) => width.set(e.nativeEvent.layout.width)}>
-      {!first && <View style={[s.line, { backgroundColor: t.color.border.subtle }]} />}
       <GestureDetector gesture={pan}>
         <View style={s.track}>
           <Animated.View style={[s.block, s.left, { backgroundColor: t.color.swipe.done }, done]}>
@@ -133,7 +134,7 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
           <Animated.View style={[s.block, s.right, { backgroundColor: t.color.swipe.later }, later]}>
             <Animated.View style={laterLabel}><Text style={s.blockText} color={t.color.swipe.ink}>{labels?.later ?? 'LATER'}</Text></Animated.View>
           </Animated.View>
-          <Animated.View style={[s.content, content]}>
+          <Animated.View style={[s.content, { backgroundColor: t.tones[toneFor(card)].wash }, content]}>
             <Pressable onPress={onOpen} style={s.row} accessibilityRole="button" accessibilityHint="Opens this task's story" accessibilityActions={swipes ? [{ name: 'done', label: labels ? 'Reveal' : 'Done' }, { name: 'later', label: labels ? 'Reveal a day later' : 'Later, back to the table' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'done') onDone?.(); if (e.nativeEvent.actionName === 'later') onLater?.(); }}>
               <View style={s.icon}>
                 <Image source={sticker.src} style={{ width: sticker.w, height: sticker.h }} resizeMode="contain" />
@@ -166,13 +167,14 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
 const useStyles = makeStyles(() => ({
   item: { overflow: 'hidden' },
   glow: { position: 'absolute', left: -8, right: -8, top: 4, bottom: 4, borderRadius: 14 },
-  line: { height: 1 },
   track: { flex: 1, justifyContent: 'center' },
-  block: { position: 'absolute', top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  // Rows are panels now, 4 in from top and bottom; the swipe blocks match them.
+  block: { position: 'absolute', top: PANEL_INSET, bottom: PANEL_INSET, borderRadius: 14, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   left: { left: 0 },
   right: { right: 0 },
   blockText: { fontFamily: 'Satoshi-Black', fontSize: 14, lineHeight: 19 },
-  content: { ...StyleSheet.absoluteFill, justifyContent: 'center' },
+  // The task's own colour, washed out: the same task as its Table card (0012).
+  content: { position: 'absolute', top: PANEL_INSET, bottom: PANEL_INSET, borderRadius: 14, paddingHorizontal: 12, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: GAP, paddingVertical: 8 },
   icon: { width: 44, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, gap: 4 },

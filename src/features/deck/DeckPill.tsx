@@ -26,7 +26,7 @@ import { Text } from '@/ui/Text';
 import { ToneDot } from '@/ui/ToneDot';
 
 import type { Rect } from './CardStack';
-import { assignDots } from './dots';
+import { toneFor } from './taskTone';
 import type { Card } from './model';
 
 // Figma "ui update 2": the pill is 48 tall inside a 3 padding ring; 233 wide with the hint,
@@ -160,7 +160,6 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const close = useAnimatedStyle(() => ({ opacity: shut.value }));
   const peeking = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - shut.value), transform: [{ translateY: ready.value * 8 }] }));
 
-  const dots = assignDots(cards);
   const shown = cards.slice(0, 3);
   const more = cards.length - shown.length;
 
@@ -199,7 +198,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
               <View style={s.dots}>
                 {shown.map((c, i) => (
                   <Animated.View key={c.id} entering={pop} style={i > 0 && s.overlap}>
-                    <ToneDot colors={dots.get(c.id)} size={DOT} />
+                    <ToneDot colors={t.tones[toneFor(c)].dot} size={DOT} />
                   </Animated.View>
                 ))}
                 {more > 0 && (

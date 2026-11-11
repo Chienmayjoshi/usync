@@ -39,6 +39,8 @@ export type Card = {
   surprise?: boolean;
   /** The date its priority stands for; for a surprise, when it gets revealed. */
   dueOn?: string | null;
+  /** Its own colour, kept wherever it goes (0012). */
+  color?: string | null;
 };
 
 export type StoryCard = { id: string; title: string; when: string; together: boolean; bucket?: Bucket; doneBy?: 'me' | 'partner' | null; doneAt?: string | null };

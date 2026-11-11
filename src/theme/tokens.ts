@@ -23,6 +23,8 @@ export type ToneSpec = {
   cardGlow: readonly [string, string];
   /** The small round token for a card (My Deck pill, the card morphing into it): two lights on white. */
   dot: readonly [string, string];
+  /** A pale wash of the card face for list rows: the same task, quieter. */
+  wash: string;
 };
 
 export type Scheme = 'light' | 'dark';
@@ -80,7 +82,7 @@ const inks: Record<Scheme, Record<Tone, string>> = {
 
 const buildTones = (s: Scheme) =>
   Object.fromEntries(
-    (Object.keys(faces) as Tone[]).map((t) => [t, { face: faces[t], accent: faces[t], ink: inks[s][t], glow: glows[t], card: cards[t].fill, cardGlow: cards[t].glow, dot: cards[t].dot }]),
+    (Object.keys(faces) as Tone[]).map((t) => [t, { face: faces[t], accent: faces[t], ink: inks[s][t], glow: glows[t], card: cards[t].fill, cardGlow: cards[t].glow, dot: cards[t].dot, wash: cards[t].fill + (s === 'light' ? '24' : '3D') }]),
   ) as Record<Tone, ToneSpec>;
 
 const light = {

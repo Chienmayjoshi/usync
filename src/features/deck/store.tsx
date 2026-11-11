@@ -55,7 +55,7 @@ function toState(rows: TaskRow[], events: EventRow[], side: Side, myId: string):
     doneBy: r.done_by ? (r.done_by === myId ? 'me' : 'partner') : null, doneAt: r.done_at, waitingNote: r.waiting_note,
     droppedBy: r.dropped_by ? (r.dropped_by === myId ? 'me' : 'partner') : null, createdAt: r.created_at, sortAt: r.sort_at,
     request: r.request ?? null, requestedBy: r.requested_by ? (r.requested_by === myId ? 'me' : 'partner') : null, surprise: !!r.surprise,
-    dueOn: r.due_on ?? null,
+    dueOn: r.due_on ?? null, color: r.color ?? null,
   }));
   const album: StoryCard[] = rows
     .filter((r) => r.status === 'done')

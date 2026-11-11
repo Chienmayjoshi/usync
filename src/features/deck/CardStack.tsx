@@ -551,8 +551,7 @@ type HandValues = {
 function Morph({ card, width, height, hand, grab }: { card: Card; width: number; height: number; hand: HandValues; grab: SharedValue<{ x: number; y: number; set: number }> }) {
   const t = useTheme();
   const s = useStyles();
-  const names = useNames();
-  const spec = t.tones[toneFor(card, names.colors)];
+  const spec = t.tones[toneFor(card)];
   const { tx, ty, morph, landing } = hand;
 
   // The card's own face, closing in on its middle: the outline shrinks and rounds to a circle

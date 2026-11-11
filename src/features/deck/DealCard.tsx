@@ -4,7 +4,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import { useNames } from '@/features/account/account';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
-import type { PersonColor, Tone } from '@/theme/tokens';
+import type { PersonColor } from '@/theme/tokens';
 import { type Mood } from '@/features/mascot/lines';
 import { Mascot } from '@/features/mascot/Mascot';
 import type { MascotRecipe } from '@/features/mascot/recipe';
@@ -14,6 +14,7 @@ import { PopButton } from '@/ui/PopButton';
 import { Text } from '@/ui/Text';
 
 import { type Card, forMe, isQuick } from './model';
+import { toneFor } from './taskTone';
 
 /** Figma card: 350 x 300. */
 export const CARD_H = 300;
@@ -23,13 +24,7 @@ const CARD_INK = '#FFFFFF';
 
 export type People = { me: PersonColor; partner: PersonColor };
 
-/** Whose color a card glows in: the owner's, or for the Table, whoever added it. */
-export function toneFor(card: Card, colors: People): Tone {
-  if (card.owner === 'together') return 'gold';
-  if (card.owner === 'partner') return colors.partner;
-  if (card.owner === 'me') return colors.me;
-  return card.droppedBy === 'partner' ? colors.partner : colors.me;
-}
+export { toneFor };
 
 export type CardAnswers = { onAccept: () => void; onDecline: () => void };
 
@@ -62,7 +57,7 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
-  const tone = t.tones[toneFor(card, names.colors)];
+  const tone = t.tones[toneFor(card)];
   const them = names.partnerOr;
   const asking = forMe(card);
 

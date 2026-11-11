@@ -40,7 +40,7 @@ export function AskCard({ asks, onAccept, onDecline }: Props) {
           <View
             key={c.id}
             pointerEvents="none"
-            style={[s.plate, { backgroundColor: t.tones[toneFor(c, names.colors)].card, transform: [{ translateY: 8 + i * 6 }, { rotate: `${i === 0 ? 2.5 : -2.5}deg` }, { scale: 0.96 - i * 0.03 }] }]}
+            style={[s.plate, { backgroundColor: t.tones[toneFor(c)].card, transform: [{ translateY: 8 + i * 6 }, { rotate: `${i === 0 ? 2.5 : -2.5}deg` }, { scale: 0.96 - i * 0.03 }] }]}
           />
         ))}
         <Animated.View
