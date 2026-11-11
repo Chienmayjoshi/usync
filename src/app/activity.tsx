@@ -3,6 +3,7 @@ import { ArrowBendUpLeft, Bell, Cards, CheckCircle, Gift, Hand, Handshake, Heart
 import { type ReactNode, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import { useNames } from '@/features/account/account';
 import { useFocus } from '@/features/deck/focus';
@@ -56,12 +57,12 @@ export default function ActivityScreen() {
   return (
     <View style={[s.fill, { paddingTop: insets.top + 12 }]}>
       <View style={s.header}>
-        <Text variant="display/xl">Activity</Text>
+        <Text variant="display/xl">ACTIVITY</Text>
         <Pressable onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close" style={s.close}>
-          <X size={22} color={t.color.text.primary} />
+          <X size={20} color={t.color.text.primary} />
         </Pressable>
       </View>
-      <ScrollView contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 32 }]}>
+      <ScrollView contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 40 }]}>
         {items.length === 0 && (
           <View style={s.empty}>
             <Bell size={40} color={t.color.text.placeholder} weight="fill" />
@@ -69,13 +70,45 @@ export default function ActivityScreen() {
             <Text variant="body/md" color={t.color.text.secondary} style={s.center}>Asks, hearts, new cards and nudges show up here.</Text>
           </View>
         )}
-        {groups.needs.length > 0 && <Text style={s.label} color={t.color.text.secondary}>{`NEEDS YOU  ·  ${groups.needs.length}`}</Text>}
-        {groups.needs.map(row)}
-        {groups.today.length > 0 && <Text style={s.label} color={t.color.text.secondary}>TODAY</Text>}
-        {groups.today.map(row)}
-        {groups.earlier.length > 0 && <Text style={s.label} color={t.color.text.secondary}>EARLIER</Text>}
-        {groups.earlier.map(row)}
+        <Section label={`NEEDS YOU  ·  ${groups.needs.length}`} entries={groups.needs} row={row} />
+        <Section label="TODAY" entries={groups.today} row={row} />
+        <Section label="EARLIER" entries={groups.earlier} row={row} />
       </ScrollView>
+    </View>
+  );
+}
+
+/** Figma 285:24911: a label and its rows, 8 apart; sections sit 20 apart. */
+function Section({ label, entries, row }: { label: string; entries: Entry[]; row: (e: Entry) => ReactNode }) {
+  const t = useTheme();
+  const s = useStyles();
+  if (!entries.length) return null;
+  return (
+    <View style={s.section}>
+      <Text style={s.label} color={t.color.text.secondary}>{label}</Text>
+      {entries.map(row)}
+    </View>
+  );
+}
+
+/** Figma 286:7303: the new cards on one line, the last one fading out under the edge. */
+function Chips({ cards, extra }: { cards: Card[]; extra: number }) {
+  const t = useTheme();
+  const s = useStyles();
+  const bg = t.color.bg.surface;
+  return (
+    <View style={s.chips}>
+      {cards.map((c) => <View key={c.id} style={s.chip}><Text style={s.chipText} numberOfLines={1}>{c.title}</Text></View>)}
+      {extra > 0 && <View style={s.chip}><Text style={s.chipText}>{`+${extra}`}</Text></View>}
+      <Svg style={s.fade} width={12} height={26} pointerEvents="none">
+        <Defs>
+          <LinearGradient id="chipFade" x1="0" y1="0" x2="1" y2="0">
+            <Stop offset="0" stopColor={bg} stopOpacity={0} />
+            <Stop offset="0.95" stopColor={bg} stopOpacity={1} />
+          </LinearGradient>
+        </Defs>
+        <Rect width={12} height={26} fill="url(#chipFade)" />
+      </Svg>
     </View>
   );
 }
@@ -115,13 +148,9 @@ function Row({ entry, status, fresh, onAnswered }: { entry: Entry; status: Statu
       <View style={s.copy}>
         <Text style={s.title} color={t.color.text.primary}>{title}</Text>
         {!!body && <Text style={s.body} color={t.color.text.secondary}>{body}</Text>}
-        {item.kind === 'drop' && entry.merged > 1 && (
-          <View style={s.chips}>
-            {cards.slice(0, 2).map((c) => <View key={c.id} style={s.chip}><Text style={s.chipText} numberOfLines={1}>{c.title}</Text></View>)}
-            {ids.length > 2 && <View style={s.chip}><Text style={s.chipText}>{`+${ids.length - 2}`}</Text></View>}
-          </View>
-        )}
-        {!!status && <Text style={s.status} color={tone[status.tone]}>{status.label}</Text>}
+        {item.kind === 'drop' && entry.merged > 1 && <Chips cards={cards.slice(0, 2)} extra={ids.length - Math.min(2, cards.length)} />}
+        {/* An ask's buttons say it waits on you (Figma 286:7206), so no line above them. */}
+        {!!status?.label && status.action !== 'answer' && <Text style={s.status} color={tone[status.tone]}>{status.label}</Text>}
         {status?.action === 'answer' && card?.request && (
           <View style={s.actions}>
             <Answer label={card.request === 'take' ? 'Not this one' : card.request === 'together' ? 'Not now' : 'Keep it'} onPress={() => { onAnswered(); move(card, 'decline'); }} />
@@ -182,10 +211,12 @@ function Lead({ kind, card, pending, gone, level, reaction, surprise, yes }: {
 
 const useStyles = makeStyles((t) => ({
   fill: { flex: 1, backgroundColor: t.color.bg.canvas },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, minHeight: 56 },
+  // Figma 286:7200: the title row, 8 under it, then 20 to the first section.
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 8 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: t.color.bg.surface },
-  // Figma 286:7199: 20 between everything, labels included.
-  list: { paddingHorizontal: 20, gap: 20, paddingTop: 12 },
+  // Figma 286:7199: 20 between sections; inside one, 8 between the label and each row.
+  list: { paddingHorizontal: 20, gap: 20, paddingTop: 20 },
+  section: { gap: 8 },
   label: { fontFamily: 'Satoshi-Bold', fontSize: 12, lineHeight: 16, letterSpacing: 0.6 },
   empty: { alignItems: 'center', gap: 10, paddingTop: 140 },
   center: { textAlign: 'center' },
@@ -201,14 +232,16 @@ const useStyles = makeStyles((t) => ({
   title: { fontFamily: 'Satoshi-Bold', fontSize: 15, lineHeight: 20 },
   body: { fontFamily: 'Satoshi-Regular', fontSize: 13, lineHeight: 18 },
   status: { fontFamily: 'Satoshi-Bold', fontSize: 12, lineHeight: 16 },
-  chips: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  chip: { borderRadius: 20, borderWidth: 1, borderColor: t.color.border.strong, backgroundColor: t.color.bg.raised, paddingHorizontal: 10, paddingVertical: 4, maxWidth: 160 },
+  chips: { flexDirection: 'row', gap: 6, overflow: 'hidden', alignSelf: 'stretch' },
+  fade: { position: 'absolute', right: 0, top: 0 },
+  chip: { flexShrink: 0, borderRadius: 20, borderWidth: 1, borderColor: t.scheme === 'light' ? '#E4E4E4' : t.color.border.strong, backgroundColor: t.color.bg.raised, paddingHorizontal: 10, paddingVertical: 4, maxWidth: 160 },
   chipText: { fontFamily: 'Satoshi-Medium', fontSize: 12, lineHeight: 16 },
-  actions: { flexDirection: 'row', gap: 8, paddingTop: 4 },
+  // Figma 286:7229: 6 above the buttons, 8 between them.
+  actions: { flexDirection: 'row', gap: 8, paddingTop: 6 },
   answer: { borderRadius: 40, paddingHorizontal: 16, paddingVertical: 8 },
   answerGhost: { backgroundColor: t.color.bg.raised, borderWidth: 1, borderColor: t.color.border.strong },
   answerText: { fontFamily: 'Satoshi-Bold', fontSize: 14, lineHeight: 20 },
-  meta: { alignItems: 'flex-end', gap: 8, paddingTop: 2 },
+  meta: { alignItems: 'flex-end', gap: 8, paddingVertical: 3 },
   time: { fontFamily: 'Satoshi-Medium', fontSize: 12, lineHeight: 16 },
   dot: { width: 8, height: 8, borderRadius: 4 },
 }));

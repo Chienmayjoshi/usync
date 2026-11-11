@@ -100,13 +100,13 @@ function Thanks() {
   );
 }
 
-/** A card they finished this week: tap Appreciate for a heart, hold for the other four (Figma 295:7427). */
+/** A card they finished this week: Appreciate opens the four under its title (Figma 299:25101). */
 function DoneRow({ card }: { card: Card }) {
   const s = useStyles();
   return (
-    <View style={s.row}>
-      <Text variant="title/md" style={s.flex}>{card.title}</Text>
-      <Appreciate card={card} align="right" withNote={false} />
+    <View style={s.doneRow}>
+      <Text variant="title/md">{card.title}</Text>
+      <Appreciate card={card} />
     </View>
   );
 }
@@ -171,13 +171,11 @@ const useStyles = makeStyles((t) => ({
   rule: { alignSelf: 'stretch', height: 1, backgroundColor: t.color.text.primary, opacity: 0.6, marginTop: -6 },
   center: { textAlign: 'center' },
   body: { gap: 10 },
-  flex: { flex: 1 },
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: t.color.bg.sync, borderRadius: t.radius.md,
-    borderWidth: 2, borderColor: t.color.border.card, paddingLeft: 14, paddingRight: 8, minHeight: 64, boxShadow: t.shadow.row,
+  // Title over its Appreciate, so the four have room to open.
+  doneRow: {
+    gap: 12, backgroundColor: t.color.bg.sync, borderRadius: t.radius.md,
+    borderWidth: 2, borderColor: t.color.border.card, padding: 14, boxShadow: t.shadow.row,
   },
-  send: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: t.color.action.neutral, borderRadius: t.radius.full, paddingHorizontal: 18, height: 40, borderWidth: 2, borderColor: t.color.border.card },
-  sent: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12 },
   note: {
     flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: t.color.bg.raised, borderRadius: t.radius.lg,
     borderWidth: 1, borderColor: t.color.border.subtle, padding: 14, marginTop: 6, boxShadow: t.shadow.card,

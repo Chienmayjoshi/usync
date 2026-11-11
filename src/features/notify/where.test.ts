@@ -32,7 +32,7 @@ describe('live status', () => {
   it('offers an appreciation until one is sent', () => {
     const c = card('d', { owner: 'partner', status: 'done', doneBy: 'partner' });
     expect(liveStatus(item(1, 'done', { task_id: 'd' }), ctx([c]))?.action).toBe('appreciate');
-    expect(liveStatus(item(1, 'done', { task_id: 'd' }), ctx([c], new Map([['d', 'care']])))?.label).toBe('Hold it to change it');
+    expect(liveStatus(item(1, 'done', { task_id: 'd' }), ctx([c], new Map([['d', 'heart']])))?.label).toBe('');
   });
 
   it('sums up a burst of new cards', () => {

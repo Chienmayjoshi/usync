@@ -80,9 +80,8 @@ export function liveStatus(item: ActivityItem, ctx: Ctx): Status | null {
       return { label: placeOf(card, ctx.partner), tone: 'ok', pending: false };
     }
     case 'done': {
-      const sent = ctx.reacted.get(card.id);
-      // The chip says what was sent; the line says what you can still do with it.
-      if (sent) return { label: 'Hold it to change it', tone: 'ok', pending: false, action: 'appreciate' };
+      // Once sent, the "Appreciated" chip says it all (Figma 299:25071): no line above it.
+      if (ctx.reacted.get(card.id)) return { label: '', tone: 'ok', pending: false, action: 'appreciate' };
       return { label: 'Send an appreciation if it made your day lighter', tone: 'ok', pending: false, action: 'appreciate' };
     }
   }
