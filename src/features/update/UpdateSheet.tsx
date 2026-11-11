@@ -14,7 +14,7 @@ import { Text } from '@/ui/Text';
 import { useToast } from '@/ui/Toast';
 
 /** Hold a card, say one line about what changed. No threads, no comments: it lands in the job story. */
-export function UpdateSheet({ card, onClose }: { card: Card; onClose: () => void }) {
+export function UpdateSheet({ card, onClose, onAsk }: { card: Card; onClose: () => void; /** On the partner's cards: ask for it ("I'll do it"). */ onAsk?: () => void }) {
   const t = useTheme();
   const styles = useStyles();
   const { addUpdate } = useDeck();
@@ -47,6 +47,12 @@ export function UpdateSheet({ card, onClose }: { card: Card; onClose: () => void
     <Sheet ref={sheet} onClose={onClose}>
       <Text variant="label/md" color={t.color.text.secondary}>Add an update</Text>
       <Text variant="display/md">{card.title}</Text>
+      {onAsk && (
+        <View style={styles.ask}>
+          <Text variant="body/md" color={t.color.text.secondary} style={styles.flex}>Rather do this one yourself?</Text>
+          <PopButton label="Ask for this" tone="ghost" small onPress={() => { onAsk(); sheet.current?.close(); }} />
+        </View>
+      )}
       <View style={styles.input}>
         <TextInput
           value={note}
@@ -55,7 +61,7 @@ export function UpdateSheet({ card, onClose }: { card: Card; onClose: () => void
           placeholderTextColor={t.color.text.placeholder}
           keyboardAppearance={t.scheme}
           multiline
-          autoFocus
+          autoFocus={!onAsk}
           style={styles.inputText}
           accessibilityLabel="One line update"
         />
@@ -74,5 +80,7 @@ const useStyles = makeStyles((t) => ({
   input: { backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, paddingHorizontal: 16, paddingVertical: 12, minHeight: 72 },
   inputText: { color: t.color.text.primary, fontFamily: fonts.uiSemiBold, fontSize: 17, lineHeight: 22 },
   chip: { alignSelf: 'flex-start', borderWidth: 1, borderColor: t.color.border.strong, borderRadius: t.radius.full, paddingHorizontal: 14, paddingVertical: 8 },
+  ask: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: t.color.bg.surface, borderRadius: t.radius.md, paddingHorizontal: 14, paddingVertical: 10 },
+  flex: { flex: 1 },
   chipOn: { backgroundColor: t.color.accent.tag, borderColor: t.color.accent.tag },
 }));

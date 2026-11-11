@@ -1,13 +1,13 @@
 import type { Card } from '@/features/deck/model';
 
-import { NUDGE_LINES } from './linesData';
+import { DECK_LINES, NUDGE_LINES } from './linesData';
 
-export { NUDGE_LINES };
+export { DECK_LINES, NUDGE_LINES };
 
 export type NudgeLevel = 0 | 1 | 2 | 3;
 export type NudgeKind = 'mine' | 'table';
 export type Voice = 'he' | 'she' | 'neutral';
-export type Mood = 'calm' | 'gentle' | 'cheeky' | 'firm';
+export type Mood = 'calm' | 'gentle' | 'cheeky' | 'firm' | 'proud' | 'asking';
 
 export const MOOD_FOR: Record<NudgeLevel, Mood> = { 0: 'calm', 1: 'gentle', 2: 'cheeky', 3: 'firm' };
 
@@ -74,4 +74,43 @@ export function lineFor(card: Card, kind: NudgeKind, level: Exclude<NudgeLevel, 
   const lines = NUDGE_LINES[kind][level];
   const line = inVoice(lines[Math.abs(nudgeSeed(card.id, localDay(now))) % lines.length], voice);
   return beside ? asThis(line) : line.replace('%s', card.title);
+}
+
+export type DeckMood = { mood: Mood; line: string; card?: Card };
+
+const today = (iso: string | null | undefined, now: number) => {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const n = new Date(now);
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+};
+
+/** How many cards I finished today (the rare good mood needs at least one). */
+export const doneToday = (cards: Card[], now: number) =>
+  cards.filter((c) => c.status === 'done' && c.doneBy === 'me' && today(c.doneAt, now)).length;
+
+/**
+ * One mood for the whole deck, Uncle Rudy style: the most ignored card sets it and the line names
+ * that card. With nothing waiting: proud on a day I finished something, otherwise calm. Stable for a day.
+ */
+export function deckMood(deck: Card[], now: number, cap: number, voice: Voice, finished: number): DeckMood {
+  let worst: { card: Card; kind: NudgeKind; level: Exclude<NudgeLevel, 0> } | null = null;
+  for (const c of deck) {
+    const kind = nudgeKind(c);
+    const level = kind ? nudgeLevel(c, now, cap) : 0;
+    if (!kind || !level) continue;
+    const older = worst && level === worst.level && (c.sortAt ?? '') < (worst.card.sortAt ?? '');
+    if (!worst || level > worst.level || older) worst = { card: c, kind, level };
+  }
+  if (worst) return { mood: MOOD_FOR[worst.level], line: lineFor(worst.card, worst.kind, worst.level, voice, now), card: worst.card };
+  const mood = finished > 0 ? 'proud' : 'calm';
+  const lines = DECK_LINES[mood];
+  const line = inVoice(lines[localDay(now) % lines.length], voice).replace('%d', String(finished));
+  return { mood, line };
+}
+
+/** What the partner's mascot says while asking something of me. */
+export function askLine(request: 'take' | 'together' | 'give', cardId: string, voice: Voice, now: number) {
+  const lines = DECK_LINES.ask[request];
+  return inVoice(lines[nudgeSeed(cardId, localDay(now)) % lines.length], voice);
 }

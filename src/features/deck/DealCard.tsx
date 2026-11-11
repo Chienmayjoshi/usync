@@ -51,7 +51,11 @@ type Props = {
   nudge?: CardNudge;
 };
 
-export type CardNudge = { mood: Mood; line: string; recipe: MascotRecipe | null; bg: string };
+export type CardNudge = {
+  mood: Mood; line: string; recipe: MascotRecipe | null; bg: string;
+  /** The big moment (an ask): the whole peep standing on the card's edge instead of a round avatar. */
+  cutout?: boolean;
+};
 
 /** A deck card: the job on the front; its story (or the delete question) on the back. */
 export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDelete, onCancelDelete, footer, minHeight = CARD_H, shadow = true, nudge }: Props) {
@@ -63,7 +67,7 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
   const asking = forMe(card);
 
   const tag = asking
-    ? card.request === 'take' ? `${them} asked you to take` : card.request === 'together' ? `${them} wants to do it together` : `${them} asked for your task`
+    ? card.request === 'take' ? 'Take this one?' : card.request === 'together' ? 'Do it together?' : 'Give it to them?'
     : card.request && card.requestedBy === 'me' ? `Waiting on ${them}`
       : card.surprise ? 'Surprise'
         : isQuick(card) ? 'Quick pick' : null;
@@ -125,8 +129,10 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
       </Animated.View>
 
       {nudge && (
-        <Animated.View style={[s.peek, peek]} pointerEvents="none">
-          <Mascot recipe={nudge.recipe} mood={nudge.mood} size={44} bg={nudge.bg} />
+        <Animated.View style={[nudge.cutout ? s.stand : s.peek, peek]} pointerEvents="none">
+          {nudge.cutout
+            ? <Mascot recipe={nudge.recipe} mood={nudge.mood} size={96} cutout />
+            : <Mascot recipe={nudge.recipe} mood={nudge.mood} size={44} bg={nudge.bg} />}
         </Animated.View>
       )}
 
@@ -192,6 +198,8 @@ const useStyles = makeStyles((t) => ({
   title: { lineHeight: 40 },
   // The partner's mascot peeks over the top right edge; its line sits in a white bubble.
   peek: { position: 'absolute', top: -26, right: 28, zIndex: 3, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF' },
+  // An ask: the partner's whole peep stands behind the card's top edge, shoulders up.
+  stand: { position: 'absolute', top: -70, right: 20, zIndex: -1 },
   nudge: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 14, borderTopLeftRadius: 4, paddingHorizontal: 12, paddingVertical: 7, maxWidth: '100%' },
   nudgeText: { fontFamily: 'Satoshi-Medium', fontSize: 13, lineHeight: 18, color: '#1A1A1A' },
   hidden: { backfaceVisibility: 'hidden' },

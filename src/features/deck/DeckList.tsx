@@ -6,10 +6,11 @@ import { useNames } from '@/features/account/account';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { FilterChips } from '@/ui/FilterChips';
 
-import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
+import { deckMood, doneToday, lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
 import { useNow } from '@/features/mascot/useNow';
 
-import type { CardAnswers } from './DealCard';
+import { AskCard } from './AskCard';
+import { DeckMascot } from './DeckMascot';
 import { revealLabel } from '@/features/drop/priority';
 
 import { type Card, forMe } from './model';
@@ -26,7 +27,11 @@ type Props = {
   /** A surprise's left swipe: reveal it a day later. */
   onPostpone: (c: Card) => void;
   onOpen: (c: Card) => void;
-  answer: (c: Card) => CardAnswers | undefined;
+  /** Answers to my partner's asks, shown pinned above the list (AskCard). */
+  onAccept: (c: Card) => void;
+  onDecline: (c: Card) => void;
+  /** Every card, for the deck mascot's rare good day (cards finished today). */
+  all: Card[];
   /** Shown when the chosen tab has nothing in it. */
   empty: ReactNode;
   /** Room to leave under the last row for the pill and the nav. */
@@ -39,18 +44,24 @@ const FADE_H = 263;
  * My Deck as a list (Figma 223:22064): "My Tasks" and "Doing Together", one row per task.
  * Swipe a row right to finish it, left to put it back on the table for later.
  */
-export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, answer, empty, bottomSpace }: Props) {
+export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, onAccept, onDecline, all, empty, bottomSpace }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
   const [tab, setTab] = useState<Tab>('mine');
-  // Anything my partner asks of me sits at the top of My Tasks, the tab the deck opens on, so a
-  // "do it together?" is never tucked away on the other tab.
-  const mine = cards.filter((c) => c.owner !== 'together' || forMe(c));
-  const together = [...cards.filter((c) => c.owner === 'together' && !forMe(c)), ...pending];
+  // Asks are decisions, not work: they leave the list for the pinned card above it.
+  const asks = cards.filter(forMe);
+  const work = cards.filter((c) => !forMe(c));
+  const mine = work.filter((c) => c.owner !== 'together');
+  const together = [...work.filter((c) => c.owner === 'together'), ...pending];
+
   const shown = tab === 'mine' ? mine : together;
   const f = t.color.fade;
   const now = useNow();
+  const finished = doneToday(all, now);
+  const showMascot = work.length > 0 || finished > 0;
+  // The deck's one mood; the card it talks about loses its own row line, so it isn't said twice.
+  const mood = deckMood(work, now, names.nudgeMax, names.voices.partner, finished);
   // A card sitting too long speaks in the partner's mascot's voice (0007's nudges, mirrored).
   const nudgeFor = (c: Card) => {
     const kind = nudgeKind(c);
@@ -62,10 +73,14 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
     };
   };
 
-  const labels = (c: Card): [string, string] => (c.request === 'take' ? ['Not this one', 'Take it'] : c.request === 'together' ? ['Not now', 'Yes'] : ['Keep it', 'Give it']);
 
   return (
     <View style={s.fill}>
+      {asks.length ? (
+        <AskCard asks={asks} onAccept={onAccept} onDecline={onDecline} />
+      ) : showMascot ? (
+        <DeckMascot mood={mood} onOpen={onOpen} />
+      ) : null}
       <FilterChips
         value={tab}
         onChange={setTab}
@@ -76,14 +91,10 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
       {shown.length ? (
         <ScrollView style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator>
           {shown.map((c, i) => {
-            const answers = answer(c);
             const waiting = pending.includes(c);
             const ink = t.tones[names.colors.partner].ink;
             const note = waiting
               ? `Waiting for ${names.partnerOr} to say yes`
-              : answers && c.request === 'together' ? `${names.partnerOr} wants to do it together`
-              : answers && c.request === 'take' ? `${names.partnerOr} asked you to take it`
-              : answers && c.request === 'give' ? `${names.partnerOr} asked for it`
               : c.surprise ? `Surprise  ·  ${revealLabel(c.dueOn, now)}`
               : undefined;
             return (
@@ -97,9 +108,7 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
                 laterStays={c.surprise}
                 labels={c.surprise ? { done: 'REVEAL', later: '+1 DAY' } : undefined}
                 note={note ? { text: note, ink: c.surprise ? t.color.accent.tag : ink } : undefined}
-                answers={answers}
-                answerLabels={answers ? labels(c) : undefined}
-                nudge={waiting || answers ? undefined : nudgeFor(c)}
+                nudge={waiting || (!asks.length && c.id === mood.card?.id) ? undefined : nudgeFor(c)}
               />
             );
           })}

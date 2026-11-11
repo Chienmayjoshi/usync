@@ -34,11 +34,14 @@ type Props = {
   size: number;
   /** The circle behind the peep (the person's color); none for a cut out. */
   bg?: string;
+  /** No round frame: the whole peep standing on the surface, for the big moments (asks, the deck). */
+  cutout?: boolean;
 };
 
 /** A person's mascot: their Open Peep, head and shoulders, in a round frame, wearing a mood. */
-export function Mascot({ recipe, mood, size, bg }: Props) {
+export function Mascot({ recipe, mood, size, bg, cutout }: Props) {
   const xml = useMemo(() => mascotSvg(recipe, mood), [recipe, mood]);
+  if (cutout) return <View style={{ width: size, height: size }}><SvgXml xml={xml} width={size} height={size} /></View>;
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, overflow: 'hidden', backgroundColor: bg }}>
       <SvgXml xml={xml} width={size} height={size} />

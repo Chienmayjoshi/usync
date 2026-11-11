@@ -9,7 +9,7 @@ import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { DeckList } from '@/features/deck/DeckList';
 import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
-import { type Card, byWhen, deckCards, forMe, pendingTogether, tableCards, type When } from '@/features/deck/model';
+import { type Card, byWhen, deckCards, pendingTogether, tableCards, type When } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
 import { MOOD_FOR, nudgeLevel } from '@/features/mascot/lines';
@@ -122,7 +122,9 @@ export default function TableScreen() {
             onLater={(c) => move(c, 'table')}
             onPostpone={(c) => move(c, 'postpone')}
             onOpen={setUpdating}
-            answer={(c) => (forMe(c) ? { onAccept: () => move(c, 'accept'), onDecline: () => move(c, 'decline') } : undefined)}
+            onAccept={(c) => move(c, 'accept')}
+            onDecline={(c) => move(c, 'decline')}
+            all={state.cards}
             bottomSpace={pillBottom + PILL_OUTER + 24}
             empty={(
               <Empty

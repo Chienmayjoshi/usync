@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import type { Card } from '@/features/deck/model';
 
-import { asThis, inVoice, lineFor, localDay, NUDGE_LINES, nudgeKind, nudgeLevel, nudgeLevelSince, nudgeSeed } from './lines';
+import { askLine, asThis, deckMood, doneToday, inVoice, lineFor, localDay, NUDGE_LINES, nudgeKind, nudgeLevel, nudgeLevelSince, nudgeSeed } from './lines';
 import { DEFAULT_RECIPE, MOOD_FACE, PARTS, randomRecipe, toOptions, validRecipe } from './recipe';
 
 const DAY = 86_400_000;
@@ -118,5 +118,37 @@ describe('surprises', () => {
   it('are never nudged', () => {
     const c = { id: 's', title: 's', owner: 'me', status: 'active', surprise: true } as Card;
     expect(nudgeKind(c)).toBeNull();
+  });
+});
+
+describe('one mood for the deck', () => {
+  it('takes the most ignored card', () => {
+    const deck = [card({ id: 'a', title: 'Fix the tap', sortAt: ago(4) }), card({ id: 'b', title: 'Pay the rent', sortAt: ago(11) }), card({ id: 'c', sortAt: ago(1) })];
+    const m = deckMood(deck, now, 3, 'she', 0);
+    expect(m.mood).toBe('firm');
+    expect(m.card?.id).toBe('b');
+    expect(m.line).toContain('Pay the rent');
+  });
+
+  it('is calm with nothing waiting, and proud only on a day I finished something', () => {
+    const fresh = [card({ sortAt: ago(1) })];
+    expect(deckMood(fresh, now, 2, 'he', 0).mood).toBe('calm');
+    const proud = deckMood(fresh, now, 2, 'he', 2);
+    expect(proud.mood).toBe('proud');
+    expect(proud.line).not.toContain('%d');
+  });
+
+  it('says the same thing all day', () => {
+    expect(deckMood([], now, 2, 'he', 0).line).toBe(deckMood([], now + 3_600_000, 2, 'he', 0).line);
+  });
+
+  it('counts only my cards finished today', () => {
+    const all = [card({ status: 'done', doneBy: 'me', doneAt: new Date(now).toISOString() }), card({ status: 'done', doneBy: 'partner', doneAt: new Date(now).toISOString() }), card({ status: 'done', doneBy: 'me', doneAt: ago(3) })];
+    expect(doneToday(all, now)).toBe(1);
+  });
+
+  it('asks in the right voice', () => {
+    for (const v of ['he', 'she', 'neutral'] as const) expect(askLine('give', 'x', v, now)).not.toMatch(/[{}|]/);
+    expect(askLine('give', 'x', 'she', now)).toContain('leti');
   });
 });

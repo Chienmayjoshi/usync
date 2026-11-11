@@ -7,7 +7,6 @@ import { haptics } from '@/theme/haptics';
 import { ease, motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { type Mood } from '@/features/mascot/lines';
-import { Mascot } from '@/features/mascot/Mascot';
 import type { MascotRecipe } from '@/features/mascot/recipe';
 import { bucketSticker } from '@/ui/DeckIcons';
 import { PopButton } from '@/ui/PopButton';
@@ -134,7 +133,7 @@ export function SwipeRow({ card, first, onDone, onLater, onOpen, answers, answer
                   ? <Text style={s.meta} color={nudge.ink} numberOfLines={1}>{nudge.line}</Text>
                   : <Text style={s.meta} color={t.color.text.secondary} numberOfLines={1}>{meta}</Text>}
               </View>
-              {nudge && !answers && <Mascot recipe={nudge.recipe} mood={nudge.mood} size={28} bg={nudge.bg} />}
+              {/* No face per row: the deck's one mascot speaks for it above the list (DeckMascot). */}
               {answers && answerLabels && (
                 <View style={s.answers}>
                   <PopButton label={answerLabels[0]} tone="ghost" small onPress={answers.onDecline} />

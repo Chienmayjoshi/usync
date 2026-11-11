@@ -35,6 +35,9 @@ export const MOOD_FACE: Record<Mood, string> = {
   gentle: 'smile',
   cheeky: 'cheeky',
   firm: 'driven',
+  // Rare: a day that went well. And the face it wears while asking something of you.
+  proud: 'lovingGrin1',
+  asking: 'explaining',
 };
 
 /** Who nudges until a person makes their own: a friendly usync peep. */

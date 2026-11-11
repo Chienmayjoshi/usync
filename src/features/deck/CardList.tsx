@@ -44,6 +44,7 @@ export function Row({ card, onPress }: { card: Card; onPress: () => void }) {
         <Text variant="caption" color={t.color.text.secondary}>{meta}</Text>
         {card.status === 'waiting' && !!card.waitingNote && <Text variant="caption" color={t.color.text.muted}>{card.waitingNote}</Text>}
         {card.droppedBy === 'partner' && <Text variant="label/md" color={t.tones[names.colors.partner].ink}>{`from ${names.partnerOr}`}</Text>}
+        {card.request === 'give' && card.requestedBy === 'me' && <Text variant="label/md" color={t.color.accent.tag}>You asked for it</Text>}
       </View>
       <CaretRight size={18} color={t.color.text.muted} />
     </Pressable>

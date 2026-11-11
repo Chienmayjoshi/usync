@@ -3,14 +3,12 @@ import { View } from 'react-native';
 
 import { HeaderAvatars } from '@/features/account/HeaderAvatars';
 import { useNames } from '@/features/account/account';
-import { CardStack } from '@/features/deck/CardStack';
 import { Row } from '@/features/deck/CardList';
 import { type Card, partnerDeck, togetherCards, waitingCards } from '@/features/deck/model';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
-import { PopButton } from '@/ui/PopButton';
 import { Screen } from '@/ui/Screen';
 import { Text } from '@/ui/Text';
 
@@ -36,19 +34,10 @@ export default function PartnerScreen() {
       {!them ? (
         <Text variant="body/lg" color={t.color.text.secondary}>Your partner hasn’t joined yet. Share your code from the Table.</Text>
       ) : !ready ? null : ranked.length ? (
-        <>
-          <Text variant="label/md" color={t.color.text.secondary}>{`On ${them}’s deck  ·  ${ranked.length}`}</Text>
-          <CardStack
-            cards={ranked}
-            actions={{}}
-            onUpdate={setUpdating}
-            footer={(c) => (c.status === 'active' && !c.request ? (
-              <View style={s.footer}>
-                <PopButton label="Ask for this" tone="ghost" small onPress={() => move(c, 'ask_for')} />
-              </View>
-            ) : null)}
-          />
-        </>
+        // A glance, not a decision: her deck as rows. Tap one for its story and "Ask for this".
+        <Section label={`On ${them}’s deck  ·  ${ranked.length}`}>
+          {ranked.map((c) => <Row key={c.id} card={c} onPress={() => setUpdating(c)} />)}
+        </Section>
       ) : (
         <View style={s.empty}>
           <Text variant="display/lg">{`${them}’s deck is clear.`}</Text>
@@ -66,7 +55,13 @@ export default function PartnerScreen() {
           {waiting.map((c) => <Row key={c.id} card={c} onPress={() => setUpdating(c)} />)}
         </Section>
       )}
-      {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
+      {updating && (
+        <UpdateSheet
+          card={updating}
+          onClose={() => setUpdating(null)}
+          onAsk={updating.owner === 'partner' && updating.status === 'active' && !updating.request ? () => move(updating, 'ask_for') : undefined}
+        />
+      )}
     </Screen>
   );
 }

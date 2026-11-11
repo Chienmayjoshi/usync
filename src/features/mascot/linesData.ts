@@ -54,3 +54,23 @@ export const NUDGE_LINES = {
     ],
   },
 } as const;
+
+// The deck mascot's own lines (app only, no push carries them): calm, the rare proud day, and
+// what it says while asking something of you. %d is how many cards were finished today.
+export const DECK_LINES = {
+  calm: [
+    'Sab set hai. Keep going 👌',
+    'Aaj ka plan solid lag raha hai.',
+    'Chill hai, sab track pe hai 🙂',
+  ],
+  proud: [
+    'Wah! Aaj %d kaam khatam 🎉',
+    'Deck pe sab under control. Proud of you 🫶',
+    'Respect. Chai pe chalein? ☕',
+  ],
+  ask: {
+    take: ['Yeh tum le lo na? 🙏', 'Is baar tumhari baari? 😇'],
+    together: ['Saath karein? 🙂', 'Yeh hum dono milke kar lein?'],
+    give: ['Yeh mujhe de do, main kar {leta|leti|lete} {hoon|hoon|hain}.'],
+  },
+} as const;
