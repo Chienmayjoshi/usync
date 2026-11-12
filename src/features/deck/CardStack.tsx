@@ -107,10 +107,13 @@ const RUBBER = 0.5;
  */
 const pose = (level: number, count: number, h: number, dir: number) => {
   'worklet';
-  const h1 = (h * 259) / 394;
-  const h2 = (h * 200) / 394;
+  // One scale each, so a card behind is the same card smaller, never squashed (its avatar stays
+  // round, its title keeps its shape): Figma's widths, 302 and 254 of 350. Only their tops show
+  // above the front card, so those keep Figma's place: 28.4 and 4.4 down the stack.
+  const s1 = 302 / 350;
+  const s2 = 254 / 350;
   const c = 52 + h / 2;
-  const back = { ty: 4.37 + h2 / 2 - c, sx: 254 / 350, sy: 200 / 394, rot: 2 };
+  const back = { ty: 4.37 + (h * s2) / 2 - c, sx: s2, sy: s2, rot: 2 };
   if (level < 0) {
     const p = Math.min(1, -level);
     return {
@@ -122,9 +125,9 @@ const pose = (level: number, count: number, h: number, dir: number) => {
   }
   const l = Math.min(level, 2);
   return {
-    ty: interpolate(l, [0, 1, 2], [0, 28.37 + h1 / 2 - c, back.ty]),
-    sx: interpolate(l, [0, 1, 2], [1, 302 / 350, back.sx]),
-    sy: interpolate(l, [0, 1, 2], [1, 259 / 394, back.sy]),
+    ty: interpolate(l, [0, 1, 2], [0, 28.37 + (h * s1) / 2 - c, back.ty]),
+    sx: interpolate(l, [0, 1, 2], [1, s1, back.sx]),
+    sy: interpolate(l, [0, 1, 2], [1, s1, back.sy]),
     rot: interpolate(l, [0, 1, 2], [0, -2, back.rot]),
     // Three cards show at most, and never more than the stack holds: 1 card, no tilted ones.
     opacity: Math.min(interpolate(level, [2, 3], [1, 0], Extrapolation.CLAMP), interpolate(level, [count - 1, count], [1, 0], Extrapolation.CLAMP)),
@@ -473,6 +476,8 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     onFinalize: () => {
       'worklet';
       cancelAnimation(holding);
+      // Cancelled mid-move (another gesture or the system took over): put the card back.
+      if (mode.value !== IDLE) { mode.set(IDLE); armed.set(0); settle(); }
       if (dropNow) dropNow.ready.set(withTiming(0, { duration: 160 }));
       // A press that never became a carry puts the card back down.
       if (mode.value !== DRAG && landing.value === 0 && !detached.value) {
