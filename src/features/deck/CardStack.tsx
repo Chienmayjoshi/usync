@@ -1,18 +1,10 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
-import {
-  GestureDetector,
-  useCompetingGestures,
-  useLongPressGesture,
-  usePanGesture,
-  useSimultaneousGestures,
-  useTapGesture,
-} from 'react-native-gesture-handler';
+import { GestureDetector, useCompetingGestures, usePanGesture, useTapGesture } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
   Extrapolation,
   interpolate,
-  interpolateColor,
   measure,
   type SharedValue,
   useAnimatedRef,
@@ -20,6 +12,7 @@ import Animated, {
   useDerivedValue,
   useSharedValue,
   withDelay,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -36,6 +29,7 @@ import { useNow } from '@/features/mascot/useNow';
 
 import { CARD_H, type CardAnswers, type CardNudge, DealCard, toneFor } from './DealCard';
 import { type Card, forMe } from './model';
+import { DELETE_MS, dropCommits, HOLD_MS, intentOf, stepCommits } from './stackGesture';
 
 export type Dir = 'left' | 'right';
 export type SwipeAction = { label: string; color: string; run: (card: Card) => void };
@@ -83,8 +77,6 @@ type Props = {
   onUpdate?: (card: Card) => void;
   answer?: (card: Card) => CardAnswers | undefined;
   footer?: (card: Card) => ReactNode;
-  /** Where the stack sits: the cards waiting behind take that surface's shades. */
-  surface?: 'table' | 'drawer';
   /** The front card's height (Figma 394); the Table shortens it on small phones. */
   cardH?: number;
   /** A card to bring to the front ("id@time"), when sent here from Activity or a push. */
@@ -93,38 +85,51 @@ type Props = {
 
 const THRESHOLD = 110;
 const FLING = 900;
-/** A scroll commits past this share of a step, or on a flick faster than SCROLL_FLING. */
-const COMMIT = 0.35;
-const SCROLL_FLING = 700;
-const LIFT_AFTER = 200;
-const DELETE_AFTER = 450;
+/**
+ * The stack moving a place, and anything let go that springs home: the reference's spring
+ * (methodical-plans-198864.framer.app: stiffness 170, damping 26). Interruptible, so quick swipes
+ * in a row carry on from wherever the stack is.
+ */
+const STACK_SPRING = { stiffness: 170, damping: 26, mass: 1 } as const;
+/** Following the finger up or down: half of it, like the reference's rubber band. */
+const RUBBER = 0.5;
 
 /**
  * Where a card sits for a given level: 0 is the front, 1 and 2 the tilted cards behind it
  * (Figma 300:25117-8: 302 x 259 tilted -2deg with its top 28.4 down, then 254 x 200 tilted 2deg
- * with its top 4.4 down, for a 394 front), 3 is gone behind them, and -1 is gone above: shrunk,
- * lifted and faded, as in assets/deckscroll.mp4. Offsets are from the front card's centre (52
- * from the top of the stack); on a shorter card the ones behind shrink in step.
+ * with its top 4.4 down, for a 394 front), 3 is gone behind them. Offsets are from the front
+ * card's centre (52 from the top of the stack); on a shorter card the ones behind shrink in step.
+ *
+ * Between -1 and 0 a card travels between the front and the back slot: swiped up it tucks away
+ * behind the others (drawn beneath them) and fades as it gets there; swiped back down it rises
+ * from there, drawn on top, fading in as it comes (dir -1) so it never pops over the front.
+ * Each card behind is dimmed 15% a place, as in the reference (dim).
  */
-const pose = (level: number, count: number, h: number) => {
+const pose = (level: number, count: number, h: number, dir: number) => {
   'worklet';
   const h1 = (h * 259) / 394;
   const h2 = (h * 200) / 394;
   const c = 52 + h / 2;
+  const back = { ty: 4.37 + h2 / 2 - c, sx: 254 / 350, sy: 200 / 394, rot: 2 };
   if (level < 0) {
     const p = Math.min(1, -level);
-    // The clip clears the leaving card early: it is gone by two thirds of the step.
-    return { ty: -140 * p, sx: 1 - 0.12 * p, sy: 1 - 0.12 * p, rot: 0, opacity: interpolate(level, [-0.65, -0.1], [0, 1], Extrapolation.CLAMP), shade: 0 };
+    return {
+      ty: back.ty * p, sx: 1 + (back.sx - 1) * p, sy: 1 + (back.sy - 1) * p, rot: back.rot * p,
+      opacity: dir < 0 ? interpolate(level, [-1, -0.6], [0, 1], Extrapolation.CLAMP) : interpolate(level, [-1, -0.8], [0, 1], Extrapolation.CLAMP),
+      shade: p,
+      dim: 0.3 * p,
+    };
   }
   const l = Math.min(level, 2);
   return {
-    ty: interpolate(l, [0, 1, 2], [0, 28.37 + h1 / 2 - c, 4.37 + h2 / 2 - c]),
-    sx: interpolate(l, [0, 1, 2], [1, 302 / 350, 254 / 350]),
-    sy: interpolate(l, [0, 1, 2], [1, 259 / 394, 200 / 394]),
-    rot: interpolate(l, [0, 1, 2], [0, -2, 2]),
+    ty: interpolate(l, [0, 1, 2], [0, 28.37 + h1 / 2 - c, back.ty]),
+    sx: interpolate(l, [0, 1, 2], [1, 302 / 350, back.sx]),
+    sy: interpolate(l, [0, 1, 2], [1, 259 / 394, back.sy]),
+    rot: interpolate(l, [0, 1, 2], [0, -2, back.rot]),
     // Three cards show at most, and never more than the stack holds: 1 card, no tilted ones.
     opacity: Math.min(interpolate(level, [2, 3], [1, 0], Extrapolation.CLAMP), interpolate(level, [count - 1, count], [1, 0], Extrapolation.CLAMP)),
     shade: interpolate(level, [0, 1], [0, 1], Extrapolation.CLAMP),
+    dim: 0.15 * l,
   };
 };
 
@@ -132,11 +137,10 @@ const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 // What the finger is doing with the top card.
 const IDLE = 0;
-const SCROLL = 1;
+/** A quick swipe up (to the back) or down (bring the last one back). */
+const STEP = 1;
 const SWIPE = 2;
 const DRAG = 3;
-/** Moving, axis not decided yet. */
-const PICK = 4;
 
 /**
  * A stack of cards. The top one is live; the next two wait behind it, tilted and shaded.
@@ -147,10 +151,9 @@ const PICK = 4;
  * slides `head` one place; nothing is reordered, so there is nothing to snap back and no flicker.
  * Sideways swipes run `actions`; press, then drag, carries the top card into `drop`.
  */
-export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, surface = 'table', focusId, cardH = CARD_H }: Props) {
+export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, focusId, cardH = CARD_H }: Props) {
   const s = useStyles();
   const n = cards.length;
-  const step = motion.stackScroll;
 
   // Where the front is, as React knows it, and which card sits there (kept across data changes).
   const [at, setAt] = useState({ H: 0, id: cards[0]?.id ?? '', idx: 0 });
@@ -164,7 +167,12 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const head = useSharedValue(at.H);
   /** Where the front is settling (the target of the last step). */
   const base = useSharedValue(at.H);
-  const from = useSharedValue(at.H);
+  /** Which way the stack last moved: 1 up (the front tucked away), -1 down (one came back). */
+  const dir = useSharedValue(1);
+  /** The card that just left the front (its strip position), still springing off its finger offset. */
+  const leavePos = useSharedValue(Number.NaN);
+  const leaveTy = useSharedValue(0);
+  const leaveTilt = useSharedValue(0);
 
   // The finger on the top card.
   const tx = useSharedValue(0);
@@ -175,9 +183,11 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const over = useSharedValue(0);
   const landing = useSharedValue(0);
   const lifted = useSharedValue(0);
-  /** Set the moment the press lifts the card (the lift itself animates). */
-  const picked = useSharedValue(0);
+  /** 0..1: the +5% and 2deg lift while the card is swiped up or down (the reference's whileDrag). */
+  const tilt = useSharedValue(0);
   const mode = useSharedValue(IDLE);
+  /** When the finger came down, so a press-and-hold can be told from a quick swipe. */
+  const beganAt = useSharedValue(0);
   const holding = useSharedValue(0);
   /** 1 while the card is carried by hand (swipe or drag), so a scroll of the stack leaves it be. */
   const detached = useSharedValue(0);
@@ -273,13 +283,25 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     grab.set({ x: 0, y: 0, set: 0 });
   };
 
-  const scrollBy = (dir: -1 | 1) => {
+  /**
+   * Move the stack a place: 1 sends the front to the back, -1 brings the last one back. The card
+   * that leaves the front keeps its finger offset and lift, and springs out of them on its way.
+   */
+  const moveStack = (by: -1 | 1) => {
     'worklet';
-    const target = base.value + dir;
+    const target = base.value + by;
+    leavePos.set(base.value);
+    leaveTy.set(ty.value);
+    leaveTilt.set(tilt.value);
+    leaveTy.set(withSpring(0, STACK_SPRING));
+    leaveTilt.set(withSpring(0, STACK_SPRING));
+    ty.set(0);
+    tilt.set(0);
+    tx.set(withSpring(0, STACK_SPRING));
+    dir.set(by);
     base.set(target);
+    head.set(withSpring(target, STACK_SPRING));
     scheduleOnRN(moved, target);
-    const left = Math.min(1, Math.abs(target - head.value));
-    head.set(withTiming(target, { duration: Math.max(60, step.duration * left), easing: step.easing }));
     scheduleOnRN(haptics.tick);
   };
 
@@ -322,52 +344,76 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
 
   const settle = () => {
     'worklet';
-    tx.set(withTiming(0, motion.cardBack));
-    ty.set(withTiming(0, motion.cardBack, (done) => { if (done) detached.set(0); }));
+    tx.set(withSpring(0, STACK_SPRING));
+    ty.set(withSpring(0, STACK_SPRING, (done) => { if (done) detached.set(0); }));
     lifted.set(withTiming(0, motion.release));
-    morph.set(withTiming(0, motion.cardBack));
-    head.set(withTiming(base.value, motion.cardBack));
+    tilt.set(withSpring(0, STACK_SPRING));
+    morph.set(withSpring(0, STACK_SPRING));
+    head.set(withSpring(base.value, STACK_SPRING));
     grab.set({ x: 0, y: 0, set: 0 });
   };
 
+  const openDelete = () => {
+    'worklet';
+    if (!onDelete || flip.value > 0.5) return;
+    deleting.set(1);
+    lifted.set(withTiming(0, motion.release));
+    scheduleOnRN(setBack, 'delete');
+    scheduleOnRN(haptics.take);
+    flip.set(withTiming(1, motion.flip));
+  };
+
+  /**
+   * One pan for everything. Quick moves: sideways swipes the card, up sends it to the back, down
+   * brings back the one that went there last. Press and keep still a moment first, then move:
+   * the card lifts and is carried, to be dropped into My Tasks. Keep still longer: delete.
+   */
   const pan = usePanGesture({
     activeOffsetX: [-8, 8],
     activeOffsetY: [-8, 8],
-    onActivate: () => {
+    onBegin: () => {
+      'worklet';
+      beganAt.set(Date.now());
+      if (flip.value > 0.5 || landing.value > 0) return;
+      // The lift says "you can carry it now"; holding on asks to delete it.
+      if (canDrop) lifted.set(withDelay(HOLD_MS, withTiming(1, motion.press)));
+      holding.set(0);
+      holding.set(withDelay(DELETE_MS, withTiming(1, { duration: 0 }, (done) => { if (done && mode.value === IDLE) openDelete(); })));
+    },
+    onActivate: (e) => {
       'worklet';
       cancelAnimation(holding);
       holding.set(0);
       if (flip.value > 0.5 || landing.value > 0) { mode.set(IDLE); return; }
-      if (picked.value) {
+      const intent = intentOf(e.translationX, e.translationY, Date.now() - beganAt.value, canDrop);
+      if (intent === 'drag') {
         mode.set(DRAG);
         detached.set(1);
+        cancelAnimation(lifted);
+        lifted.set(withTiming(1, motion.press));
         const m = measure(stackRef);
         if (m) origin.set({ x: m.pageX + m.width / 2, y: m.pageY + 52 + topHV.value / 2 });
         if (dropNow) dropNow.ready.set(withTiming(1, { duration: 160 }));
+        scheduleOnRN(haptics.tick);
         return;
       }
-      mode.set(PICK);
+      cancelAnimation(lifted);
+      lifted.set(withTiming(0, motion.release));
+      if (intent === 'swipe') {
+        mode.set(SWIPE);
+        detached.set(1);
+        return;
+      }
+      mode.set(STEP);
+      cancelAnimation(tilt);
+      tilt.set(withSpring(1, STACK_SPRING));
     },
     onUpdate: (e) => {
       'worklet';
-      if (mode.value === PICK) {
-        // The first real movement decides: up or down scrolls the stack, sideways swipes the card.
-        if (Math.abs(e.translationX) < 4 && Math.abs(e.translationY) < 4) return;
-        const vertical = Math.abs(e.translationY) > Math.abs(e.translationX);
-        mode.set(vertical ? SCROLL : SWIPE);
-        if (vertical) {
-          // Catch the stack where it is, even mid-step after a quick earlier swipe.
-          cancelAnimation(head);
-          from.set(head.value);
-        } else {
-          detached.set(1);
-        }
-      }
       const m = mode.value;
-      if (m === SCROLL) {
-        if (!can.scroll) { ty.set(e.translationY * 0.25); return; }
-        const next = from.value - e.translationY / step.distance;
-        head.set(Math.max(base.value - 1, Math.min(base.value + 1, next)));
+      if (m === STEP) {
+        // Half the finger, like a rubber band; a lone card only gives a little.
+        ty.set(e.translationY * (can.scroll ? RUBBER : 0.25));
         tx.set(e.translationX * 0.1);
         return;
       }
@@ -382,7 +428,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
         tx.set(e.translationX);
         ty.set(e.translationY);
         if (!grab.value.set) {
-          // Where on the card the finger is: the circle gathers under the finger as it forms.
+          // Where on the card the finger is: the token gathers under the finger as it forms.
           grab.set({ x: e.absoluteX - e.translationX - origin.value.x, y: e.absoluteY - e.translationY - origin.value.y, set: 1 });
         }
         if (dropNow) {
@@ -390,7 +436,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
           const k = Math.max(0, Math.min(1, (e.absoluteY - (top - MORPH_FROM)) / (MORPH_FROM - MORPH_TO)));
           if (k === 1 && morph.value < 1) scheduleOnRN(haptics.tick);
           morph.set(k);
-          // As the card leaves as a circle, the next one moves up to the front (Figma 223:21789).
+          // As the card leaves as a token, the next one moves up to the front (Figma 223:21789).
           if (n > 1) head.set(base.value + k);
         }
         const r = dropNow?.rect.value;
@@ -402,24 +448,15 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
         }
       }
     },
-    onFinalize: () => {
-      'worklet';
-      if (dropNow) dropNow.ready.set(withTiming(0, { duration: 160 }));
-    },
     onDeactivate: (e) => {
       'worklet';
       const m = mode.value;
       mode.set(IDLE);
       armed.set(0);
-      if (m === SCROLL) {
-        tx.set(withTiming(0, motion.cardBack));
-        ty.set(withTiming(0, motion.cardBack));
-        if (!can.scroll) return;
-        const v = head.value - base.value;
-        if (v > COMMIT || (v > 0 && e.velocityY < -SCROLL_FLING)) return scrollBy(1);
-        if (v < -COMMIT || (v < 0 && e.velocityY > SCROLL_FLING)) return scrollBy(-1);
-        head.set(withTiming(base.value, motion.cardBack));
-        return;
+      if (m === STEP) {
+        const up = e.translationY < 0;
+        if (can.scroll && stepCommits(e.translationY, e.velocityY, up ? -1 : 1)) return moveStack(up ? 1 : -1);
+        return settle();
       }
       if (m === SWIPE) {
         if (can.right && (e.translationX > THRESHOLD || e.velocityX > FLING)) return fly('right');
@@ -427,46 +464,26 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
         return settle();
       }
       if (m === DRAG) {
-        picked.set(0);
-        if (over.value) { over.set(0); return land(); }
+        if (dropNow && dropCommits(morph.value, over.value > 0, e.velocityY)) { over.set(0); return land(); }
+        over.set(0);
+        if (dropNow) dropNow.hot.set(withTiming(0, motion.release));
         return settle();
       }
-    },
-  });
-
-  const openDelete = () => {
-    'worklet';
-    if (!onDelete || flip.value > 0.5) return;
-    deleting.set(1);
-    lifted.set(withTiming(0, motion.release));
-    scheduleOnRN(setBack, 'delete');
-    scheduleOnRN(haptics.take);
-    flip.set(withTiming(1, motion.flip));
-  };
-
-  // Press and keep still: the card lifts, ready to be carried. Keep holding and it asks to delete.
-  const hold = useLongPressGesture({
-    minDuration: LIFT_AFTER,
-    maxDistance: 10,
-    onActivate: () => {
-      'worklet';
-      if (flip.value > 0.5) return;
-      picked.set(1);
-      lifted.set(withTiming(1, motion.press));
-      scheduleOnRN(haptics.tick);
-      holding.set(0);
-      holding.set(withDelay(DELETE_AFTER - LIFT_AFTER, withTiming(1, { duration: 0 }, (done) => { if (done && mode.value === IDLE) openDelete(); })));
     },
     onFinalize: () => {
       'worklet';
       cancelAnimation(holding);
-      if (mode.value !== DRAG) picked.set(0);
-      if (mode.value !== DRAG && !landing.value) lifted.set(withTiming(0, motion.release));
+      if (dropNow) dropNow.ready.set(withTiming(0, { duration: 160 }));
+      // A press that never became a carry puts the card back down.
+      if (mode.value !== DRAG && landing.value === 0 && !detached.value) {
+        cancelAnimation(lifted);
+        lifted.set(withTiming(0, motion.release));
+      }
     },
   });
 
   const tap = useTapGesture({
-    maxDuration: LIFT_AFTER - 10,
+    maxDuration: HOLD_MS - 10,
     onActivate: () => {
       'worklet';
       if (deleting.value) return;
@@ -475,7 +492,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     },
   });
 
-  const gesture = useCompetingGestures(useSimultaneousGestures(pan, hold), tap);
+  const gesture = useCompetingGestures(pan, tap);
 
   const closeDelete = () => {
     flip.set(withTiming(0, motion.flip, (done) => {
@@ -486,20 +503,23 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   };
 
   // Screen readers get the same moves without gestures.
-  const stepBy = (dir: -1 | 1) => {
-    const target = base.value + dir;
+  const stepBy = (by: -1 | 1) => {
+    const target = base.value + by;
+    leavePos.set(base.value);
+    dir.set(by);
     base.set(target);
     moved(target);
-    head.set(withTiming(target, { duration: step.duration, easing: step.easing }));
+    head.set(withSpring(target, STACK_SPRING));
   };
 
   if (!top) return null;
 
-  // Behind to front: the far cards first, then the front, then the ones above it (leaving or
-  // coming back), so a card on its way out always draws over the one rising under it.
+  // Bottom to top: the cards that left the front first (a card swiped up tucks beneath the rest),
+  // then the far cards, then the front last (a card brought back down comes in over the others).
   const H = at.H;
-  const window = n > 1 ? [H + 4, H + 3, H + 2, H + 1, H, H - 1, H - 2] : [H];
-  const hand = { tx, ty, enter, flip, lifted, over, landing, detached, morph };
+  const window = n > 1 ? [H - 2, H - 1, H + 4, H + 3, H + 2, H + 1, H] : [H];
+  const hand = { tx, ty, enter, flip, lifted, over, landing, detached, morph, tilt };
+  const leave = { pos: leavePos, ty: leaveTy, tilt: leaveTilt, dir };
 
   const a11y = [
     actionsNow.right && `Swipe right: ${actionsNow.right.label}.`, actionsNow.left && `Swipe left: ${actionsNow.left.label}.`,
@@ -527,7 +547,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
               card={card}
               head={head}
               count={n}
-              surface={surface}
+              leave={leave}
               topHV={topHV}
               cardH={cardH}
               hand={front ? hand : undefined}
@@ -552,8 +572,10 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
 type HandValues = {
   tx: SharedValue<number>; ty: SharedValue<number>; enter: SharedValue<number>; flip: SharedValue<number>;
   lifted: SharedValue<number>; over: SharedValue<number>; landing: SharedValue<number>; detached: SharedValue<number>;
-  morph: SharedValue<number>;
+  morph: SharedValue<number>; tilt: SharedValue<number>;
 };
+/** The card that just left the front, and which way the stack moved. */
+type LeaveValues = { pos: SharedValue<number>; ty: SharedValue<number>; tilt: SharedValue<number>; dir: SharedValue<number> };
 
 /**
  * The carried card's silhouette as it turns into a circle: it starts as the card's own shape and
@@ -615,7 +637,7 @@ type LayerProps = {
   card: Card;
   head: SharedValue<number>;
   count: number;
-  surface: 'table' | 'drawer';
+  leave: LeaveValues;
   topHV: SharedValue<number>;
   cardH: number;
   /** Only the front card gets the finger, the flip and its buttons. */
@@ -632,10 +654,8 @@ type LayerProps = {
 };
 
 /** One card on the strip. Its place in the stack is pos - head; the front one also follows the finger. */
-function Layer({ pos, card, head, count, surface, topHV, cardH, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps, nudge }: LayerProps) {
-  const t = useTheme();
+function Layer({ pos, card, head, count, leave, topHV, cardH, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps, nudge }: LayerProps) {
   const s = useStyles();
-  const shades = t.color.stack[surface];
   const zero = useSharedValue(0);
   const one = useSharedValue(1);
   const tx = hand?.tx ?? zero;
@@ -647,28 +667,30 @@ function Layer({ pos, card, head, count, surface, topHV, cardH, hand, back, answ
   const landing = hand?.landing ?? zero;
   const detached = hand?.detached ?? zero;
   const morph = hand?.morph ?? zero;
+  const lift = hand?.tilt ?? zero;
 
   const level = useDerivedValue(() => (detached.value ? 0 : pos - head.value));
   const layer = useAnimatedStyle(() => {
-    const p = pose(level.value, count, topHV.value);
-    const k = (1 + lifted.value * 0.03) * (1 - over.value * 0.25 * (morph.value > 0 ? 0 : 1)) * (1 - landing.value * 0.5);
-    const tilt = detached.value * (1 - landing.value);
+    const p = pose(level.value, count, topHV.value, leave.dir.value);
+    // The card that just left the front springs out of where the finger left it.
+    const leaving = leave.pos.value === pos;
+    const up = lift.value + (leaving ? leave.tilt.value : 0);
+    const k = (1 + lifted.value * 0.03 + up * 0.05) * (1 - over.value * 0.25 * (morph.value > 0 ? 0 : 1)) * (1 - landing.value * 0.5);
+    const swing = detached.value * (1 - landing.value);
     return {
       opacity: p.opacity * enter.value * (1 - interpolate(morph.value, [0, 0.12], [0, 1], Extrapolation.CLAMP)),
       transform: [
         { translateX: tx.value },
-        { translateY: p.ty + ty.value },
-        { rotate: `${p.rot + (tx.value / 18) * tilt}deg` },
+        { translateY: p.ty + ty.value + (leaving ? leave.ty.value : 0) },
+        { rotate: `${p.rot + (tx.value / 18) * swing + up * 2}deg` },
         { scaleX: p.sx * k },
         { scaleY: p.sy * k },
       ],
     };
   });
-  const shade = useAnimatedStyle(() => ({
-    opacity: pose(level.value, count, topHV.value).shade,
-    backgroundColor: interpolateColor(level.value, [1, 2], [shades[1], shades[0]]),
-  }));
-  const plate = useAnimatedStyle(() => ({ opacity: 1 - pose(level.value, count, topHV.value).shade }));
+  // The cards behind keep their own colours, dimmed 15% a place (the reference's brightness).
+  const shade = useAnimatedStyle(() => ({ opacity: pose(level.value, count, topHV.value, leave.dir.value).dim }));
+  const plate = useAnimatedStyle(() => ({ opacity: 1 - pose(level.value, count, topHV.value, leave.dir.value).shade }));
   const faces = {
     front: useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }] })),
     rear: useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }] })),
@@ -731,8 +753,9 @@ const useStyles = makeStyles((t) => ({
   layer: { position: 'absolute', top: 52, left: 0, right: 0 },
   plate: { ...StyleSheet.absoluteFill, borderRadius: 24, backgroundColor: t.color.bg.raised, boxShadow: t.shadow.deal },
   hide: { backfaceVisibility: 'hidden' },
-  // The cards waiting behind: plain plates with a 1.5 white stroke and a hairline ring (Figma 223:21704-5).
-  shade: { ...StyleSheet.absoluteFill, borderRadius: 24, borderWidth: 1.5, borderColor: t.color.border.card, boxShadow: t.shadow.ring },
+  // The cards waiting behind: a black dim over their own face (Figma 300:25117-8 keep the 1.5 white
+  // stroke and the hairline ring, drawn on the card itself).
+  shade: { ...StyleSheet.absoluteFill, borderRadius: 24, backgroundColor: '#000000' },
   stamp: { position: 'absolute', left: -8, right: -8, alignItems: 'center' },
   stampText: { textAlign: 'center', fontSize: 44, lineHeight: 46 },
   stampRight: { top: '40%', transform: [{ rotate: '-8deg' }] },
