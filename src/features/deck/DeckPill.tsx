@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Path, Rect as SvgRect, Stop } from 'react-native-svg';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -23,21 +23,26 @@ import { motion } from '@/theme/motion';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
 import { ArrowUpIcon, ChevronsDownIcon } from '@/ui/DeckIcons';
 import { Text } from '@/ui/Text';
-import { ToneDot } from '@/ui/ToneDot';
 
 import type { Rect } from './CardStack';
 import { toneFor } from './taskTone';
 import type { Card } from './model';
 
-// Figma "ui update 2": the pill is 48 tall inside a 3 padding ring; 233 wide with the hint,
-// 270 with tasks or while a card is carried, and "Go back to Table" while the list is open.
-const H = 48;
+// Figma "ui update 3" (300:25147, 300:25405, 300:25526): the pill is 64 tall inside a 3 padding
+// ring; 233 wide with the hint, 270 with tasks or while a card is carried, and "Go back to Table"
+// while the list is open.
+const H = 64;
 const PAD = 3;
 const W_EMPTY = 233;
 const W_FULL = 270;
 /** While the list is open: "(down arrow) Go back to Table", sized to its words. */
 const W_OPEN = 184;
-const DOT = 32;
+/** The tokens: the newest task 40 square tilted -4deg, the one before it 32 tilted 3deg (Figma 300:25534). */
+const TOKEN = 40;
+const TOKEN_BACK = 32;
+/** Where the newest token's centre sits, from the pill's centre: alone, or with others behind it. */
+const SLOT_ONE = PAD + (W_FULL - PAD * 2 - 20 - 42.69 / 2) - W_FULL / 2;
+const SLOT_MANY = PAD + (W_FULL - PAD * 2 - 20 - 80 + 18.15 + TOKEN / 2) - W_FULL / 2;
 /** Space between the pill and the nav (Figma: pill 650-704, nav top 728). */
 export const PILL_ABOVE_NAV = 24;
 export const PILL_OUTER = H + PAD * 2;
@@ -115,6 +120,8 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const p = t.color.pill;
   const ref = useAnimatedRef<View>();
   const has = cards.length > 0;
+  const count = useSharedValue(cards.length);
+  useEffect(() => { count.set(cards.length); }, [cards.length, count]);
 
   const base = useSharedValue(has ? W_FULL : W_EMPTY);
   const shut = useSharedValue(open ? 1 : 0);
@@ -131,7 +138,8 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
       if (m) {
         rect.set({ x: m.pageX, y: m.pageY, w: m.width, h: m.height });
         const cx = m.pageX + m.width / 2;
-        slot.set({ x: cx + W_FULL / 2 - PAD - 16 - DOT / 2, y: m.pageY + PILL_OUTER / 2 });
+        // The card lands as the newest token: alone if the deck was empty, in front of the rest if not.
+        slot.set({ x: cx + (count.value ? SLOT_MANY : SLOT_ONE), y: m.pageY + PILL_OUTER / 2 });
       }
       bob.set(withRepeat(withTiming(1, { duration: 520 }), -1, true));
       lap.set(0);
@@ -160,8 +168,6 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   const close = useAnimatedStyle(() => ({ opacity: shut.value }));
   const peeking = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - shut.value), transform: [{ translateY: ready.value * 8 }] }));
 
-  const shown = cards.slice(0, 3);
-  const more = cards.length - shown.length;
 
   return (
     <View style={[s.row, { bottom }]} pointerEvents="box-none">
@@ -186,27 +192,19 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
             <Animated.View style={[s.edge, s.dashed, { borderColor: p.dash }, idleEdge]} pointerEvents="none" />
             <Animated.View style={[s.edge, { borderColor: p.edge }, active]} pointerEvents="none" />
 
-            <Animated.View style={[s.layer, hint]} pointerEvents="none">
+            {/* Figma 300:25148: two chevrons and the hint. */}
+            <Animated.View style={[s.layer, s.label, hint]} pointerEvents="none">
+              <ChevronsDownIcon color={p.ink} />
               <Text style={s.text} color={p.ink} numberOfLines={1}>Drag a task here to take it</Text>
             </Animated.View>
 
+            {/* Figma 300:25406 / 300:25527: "My Tasks" behind an arrow in a white circle; the tokens on the right. */}
             <Animated.View style={[s.layer, s.split, deck]} pointerEvents="none">
               <View style={s.label}>
-                <ArrowUpIcon color={p.ink} />
-                <Text style={s.text} color={p.ink}>My Deck</Text>
+                <View style={[s.up, { backgroundColor: t.color.bg.raised, borderColor: p.dash }]}><ArrowUpIcon color={p.ink} /></View>
+                <Text style={s.strong} color={p.ink}>My Tasks</Text>
               </View>
-              <View style={s.dots}>
-                {shown.map((c, i) => (
-                  <Animated.View key={c.id} entering={pop} style={i > 0 && s.overlap}>
-                    <ToneDot colors={t.tones[toneFor(c)].dot} size={DOT} />
-                  </Animated.View>
-                ))}
-                {more > 0 && (
-                  <View style={[s.more, s.overlap, { backgroundColor: p.more, borderColor: p.edge }]}>
-                    <Text style={s.moreText} color={p.ink}>{`+${more}`}</Text>
-                  </View>
-                )}
-              </View>
+              {has && <Tokens cards={cards} />}
             </Animated.View>
 
             <Animated.View style={[s.layer, s.label, drop]} pointerEvents="none">
@@ -225,6 +223,61 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   );
 }
 
+/** When a card came into my deck (taken, or last moved): the newest first. */
+const latest = (a: Card, b: Card) => (b.sortAt ?? b.createdAt ?? '').localeCompare(a.sortAt ?? a.createdAt ?? '');
+
+/**
+ * The deck at a glance (Figma 300:25534): the latest task's token in front, the second latest
+ * tilted behind it, and "+N" for the rest once there are more than two.
+ */
+function Tokens({ cards: all }: { cards: Card[] }) {
+  const s = useStyles();
+  const cards = [...all].sort(latest);
+  const rest = cards.length - 2;
+  if (cards.length === 1) {
+    return (
+      <View style={s.one}>
+        <Animated.View key={cards[0].id} entering={pop}><Token card={cards[0]} size={TOKEN} rot={-4} dot /></Animated.View>
+      </View>
+    );
+  }
+  return (
+    <View style={s.many}>
+      <Animated.View key={cards[1].id} entering={pop} style={s.back}><Token card={cards[1]} size={TOKEN_BACK} rot={3} /></Animated.View>
+      <Animated.View key={cards[0].id} entering={pop} style={s.front}><Token card={cards[0]} size={TOKEN} rot={-4} dot /></Animated.View>
+      {/* Keyed by the count, so it pops each time the deck grows or shrinks. */}
+      {rest > 0 && (
+        <Animated.View key={rest} entering={pop} style={s.countWrap}>
+          <View style={s.count}><Text style={s.countText}>{`+${rest}`}</Text></View>
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+/** One task as a token (Figma "Table default" token): its two lights as a gradient, a white edge, a soft drop. */
+function Token({ card, size, rot, dot }: { card: Card; size: number; rot: number; dot?: boolean }) {
+  const t = useTheme();
+  const s = useStyles();
+  const [a, b] = t.tones[toneFor(card)].dot;
+  const id = `tok-${card.id}-${size}`;
+  const r = (size * 12) / 40;
+  return (
+    <View style={[s.token, { width: size, height: size, borderRadius: r, transform: [{ rotate: `${rot}deg` }] }]}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id={id} x1="0.31" y1="0.07" x2="0.79" y2="0.93">
+            <Stop offset="0" stopColor={a} />
+            <Stop offset="1" stopColor={b} />
+          </LinearGradient>
+        </Defs>
+        <SvgRect x={0.5} y={0.5} width={size - 1} height={size - 1} rx={r - 0.5} fill={`url(#${id})`} stroke="#FFFFFF" strokeWidth={1} />
+      </Svg>
+      {dot && <View style={s.badge} />}
+    </View>
+  );
+}
+
 const useStyles = makeStyles(() => ({
   row: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   wrap: { height: PILL_OUTER, padding: PAD, borderRadius: 40 },
@@ -238,13 +291,21 @@ const useStyles = makeStyles(() => ({
   edge: { ...StyleSheet.absoluteFill, borderRadius: 40, borderWidth: 1.5 },
   dashed: { borderStyle: 'dashed' },
   layer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
-  split: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 14.5 },
+  split: { flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 20 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   down: { transform: [{ rotate: '180deg' }] },
   text: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 19 },
-  dots: { flexDirection: 'row', alignItems: 'center' },
-  overlap: { marginLeft: -8 },
-  // Figma 232:22650: the "+2" circle.
-  more: { width: DOT, height: DOT, borderRadius: DOT / 2, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  moreText: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 20 },
+  strong: { fontFamily: 'Satoshi-Bold', fontSize: 14, lineHeight: 19 },
+  up: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  one: { width: 42.69, height: 42.69, alignItems: 'center', justifyContent: 'center' },
+  many: { width: 80, height: 44 },
+  back: { position: 'absolute', left: 47.15, top: 6 },
+  front: { position: 'absolute', left: 18.15, top: 2 },
+  token: { boxShadow: '0px 8px 24px rgba(149,157,165,0.2)' },
+  // Figma: a 7 red dot with a white edge on the newest token's top right corner.
+  badge: { position: 'absolute', top: 0.3, right: -2.5, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5D54', borderWidth: 1, borderColor: '#FFFFFF' },
+  // Figma 300:25539: a white tag, tilted 4deg, over the front token's left edge.
+  countWrap: { position: 'absolute', left: 0, top: 13, width: 36, alignItems: 'center' },
+  count: { backgroundColor: '#FFFFFF', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, transform: [{ rotate: '4deg' }], boxShadow: '0px 8px 12px rgba(149,157,165,0.2)' },
+  countText: { fontFamily: 'Satoshi-Bold', fontSize: 14, lineHeight: 19, color: '#466FF6' },
 }));

@@ -4,15 +4,14 @@ import Svg, { Path } from 'react-native-svg';
 
 import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
-import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { makeStyles } from '@/theme/ThemeProvider';
 
 import { useOpenDrop } from './DropSheet';
 
-const FAB = 56;
+const FAB = 68;
 
 /** The round + beside the tab pill. Tap to type, hold to talk. */
 export function DropFab() {
-  const t = useTheme();
   const s = useStyles();
   const openDrop = useOpenDrop();
   const p = useSharedValue(0);
@@ -29,9 +28,9 @@ export function DropFab() {
       delayLongPress={350}
     >
       <Animated.View style={[s.fab, face]}>
-        {/* Figma's "+" is Manrope Light 32: a 17.6 wide cross with 1.6 strokes. Drawn, so it sits dead centre on every platform. */}
-        <Svg width={18} height={18} viewBox="0 0 18 18">
-          <Path d="M9 0.2V17.8M0.2 9H17.8" stroke={t.color.action.onPrimary} strokeWidth={1.6} />
+        {/* Figma 300:25892: a 24 plus, 1.5 strokes with round ends. Drawn, so it sits dead centre on every platform. */}
+        <Svg width={24} height={24} viewBox="0 0 24 24">
+          <Path d="M3.75 12H20.25M12 3.75V20.25" stroke="#FFFFFF" strokeWidth={1.5} strokeLinecap="round" />
         </Svg>
       </Animated.View>
     </Pressable>
@@ -39,10 +38,10 @@ export function DropFab() {
 }
 
 const useStyles = makeStyles((t) => ({
-  // Figma 119:3583: 56, #0B0A0F, 1.5 white stroke, shadows 0 20 25 / 0 10 10 (Figma blur).
+  // Figma 300:25891: 68, #FF7A59, 1.5 white stroke, shadows 0 20 25 / 0 10 10 (Figma blur).
   fab: {
-    width: FAB, height: FAB, borderRadius: FAB / 2, backgroundColor: t.scheme === 'light' ? '#0B0A0F' : t.color.action.primary,
-    borderWidth: 1.5, borderColor: t.color.border.card,
+    width: FAB, height: FAB, borderRadius: FAB / 2, backgroundColor: '#FF7A59',
+    borderWidth: 1.5, borderColor: t.scheme === 'light' ? '#FFFFFF' : 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
     boxShadow: t.scheme === 'light' ? '0px 20px 25px rgba(0,0,0,0.1), 0px 10px 10px rgba(0,0,0,0.04)' : t.shadow.card,
   },

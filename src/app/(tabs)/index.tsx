@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,7 +9,8 @@ import { useAccount, useNames } from '@/features/account/account';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { DeckList } from '@/features/deck/DeckList';
 import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
-import { type Card, byWhen, deckCards, pendingTogether, tableCards, type When } from '@/features/deck/model';
+import { CARD_H } from '@/features/deck/DealCard';
+import { type Card, deckCards, pendingTogether, tableCards } from '@/features/deck/model';
 import { useFocus } from '@/features/deck/focus';
 import { useDeck } from '@/features/deck/store';
 import { useMoves } from '@/features/deck/useMoves';
@@ -20,7 +21,6 @@ import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
-import { FilterChips } from '@/ui/FilterChips';
 import { navBottom, NAV_H } from '@/ui/TabBar';
 import { Text } from '@/ui/Text';
 
@@ -33,6 +33,7 @@ export default function TableScreen() {
   const t = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const { height: screenH } = useWindowDimensions();
   const { state, ready } = useDeck();
   const { partner, inviteCode } = useAccount();
   const names = useNames();
@@ -40,7 +41,6 @@ export default function TableScreen() {
   useMascotPrompt();
   const [updating, setUpdating] = useState<Card | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [tableWhen, setTableWhen] = useState<When>('all');
   const open = useSharedValue(0);
   const rect = useSharedValue<Rect>({ x: -1000, y: -1000, w: 0, h: 0 });
   const slot = useSharedValue({ x: 0, y: 0 });
@@ -57,7 +57,6 @@ export default function TableScreen() {
     // After this screen has come into view (the tab switch happens in the same tap).
     const go = setTimeout(() => {
       if (focus.place === 'table') {
-        setTableWhen('all');
         open.set(withTiming(0, motion.panel));
         setExpanded(false);
       } else {
@@ -80,13 +79,14 @@ export default function TableScreen() {
   const solo = !partner;
   const table = solo ? [...deckCards(state), ...tableCards(state)] : tableCards(state);
   const deck = deckCards(state);
-  const tableShown = byWhen(table, tableWhen);
   const headerTop = insets.top + 18;
   const pillBottom = navBottom(insets.bottom) + NAV_H + PILL_ABOVE_NAV;
   const them = names.partnerOr;
-
-  const counts = (cards: Card[]) => ({ all: cards.length, week: byWhen(cards, 'week').length, later: byWhen(cards, 'later').length });
-  const tc = counts(table);
+  // Figma's card is 394 tall on an 844 phone, 24 clear of the pill. A shorter phone gets a shorter
+  // card (never under 300) rather than one that runs into the pill.
+  const stackTop = headerTop + (solo ? 234 : 92);
+  const floor = solo ? navBottom(insets.bottom) + NAV_H : pillBottom + PILL_OUTER;
+  const cardH = Math.round(Math.max(300, Math.min(CARD_H, screenH - floor - 24 - stackTop - 52)));
   const now = useNow();
   // The most ignored card in my deck decides how the partner's mascot looks, peeking over the pill.
   const deckLevel = deck.reduce<number>((m, c) => Math.max(m, nudgeLevel(c, now, names.nudgeMax)), 0) as 0 | 1 | 2 | 3;
@@ -97,7 +97,7 @@ export default function TableScreen() {
 
   return (
     <View style={s.screen}>
-      {/* Figma: header row 68 tall at y=72 (18 under the status bar), chips at 164, the stack 32 below them. */}
+      {/* Figma 300:25102: header row 68 tall at y=72 (18 under the status bar), the stack at 164. */}
       <View style={[s.header, { top: headerTop }]}>
         <Text variant="display/lg" style={s.flex}>{expanded ? 'My deck' : 'On table'}</Text>
         <HeaderAvatars />
@@ -105,16 +105,12 @@ export default function TableScreen() {
 
       {solo && inviteCode && <InviteStrip code={inviteCode} top={headerTop + 76} />}
 
-      <Animated.View style={[s.table, { top: headerTop + (solo ? 234 : 92) }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
-        <FilterChips
-          value={tableWhen}
-          onChange={setTableWhen}
-          glow={t.tones[names.colors.me].glow}
-          options={[{ value: 'all', label: 'All Tasks', count: tc.all }, { value: 'week', label: 'This week', count: tc.week }, { value: 'later', label: 'Later', count: tc.later }]}
-        />
-        {!ready ? null : tableShown.length ? (
+      <Animated.View style={[s.table, { top: stackTop }, tableFade]} pointerEvents={expanded ? 'none' : 'box-none'}>
+        {/* Figma 300:25103: no filters any more; the stack sits right under the header. */}
+        {!ready ? null : table.length ? (
           <CardStack
-            cards={tableShown}
+            cards={table}
+            cardH={cardH}
             focusId={expanded ? undefined : focusId}
             actions={solo ? {
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
@@ -130,7 +126,7 @@ export default function TableScreen() {
           <Empty
             image={require('@/../assets/illustrations/table-clear.png')}
             title="The Table Is Clear."
-            body={table.length ? 'Nothing here for this filter.' : solo ? 'Nothing to do right now.\nAdd something new with +.' : 'Everything has an owner right now.\nAdd something new, or open your deck.'}
+            body={solo ? 'Nothing to do right now.\nAdd something new with +.' : 'Everything has an owner right now.\nAdd something new, or open your deck.'}
           />
         )}
       </Animated.View>

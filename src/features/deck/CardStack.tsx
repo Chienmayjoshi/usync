@@ -34,7 +34,7 @@ import { Text } from '@/ui/Text';
 import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
 import { useNow } from '@/features/mascot/useNow';
 
-import { type CardAnswers, type CardNudge, DealCard, toneFor } from './DealCard';
+import { CARD_H, type CardAnswers, type CardNudge, DealCard, toneFor } from './DealCard';
 import { type Card, forMe } from './model';
 
 export type Dir = 'left' | 'right';
@@ -63,6 +63,9 @@ const MORPH_TO = 110;
 /** The finger counts as over the target this far above its top (where the circle hangs). */
 const DROP_REACH = 120;
 const CIRCLE = 80;
+/** The pill's token it lands as (Figma 300:25413): 40 square, 12 corners. */
+const TOKEN = 40;
+const TOKEN_R = 12;
 
 export const isOver = (r: Rect, x: number, y: number) => {
   'worklet';
@@ -82,6 +85,8 @@ type Props = {
   footer?: (card: Card) => ReactNode;
   /** Where the stack sits: the cards waiting behind take that surface's shades. */
   surface?: 'table' | 'drawer';
+  /** The front card's height (Figma 394); the Table shortens it on small phones. */
+  cardH?: number;
   /** A card to bring to the front ("id@time"), when sent here from Activity or a push. */
   focusId?: string;
 };
@@ -96,12 +101,16 @@ const DELETE_AFTER = 450;
 
 /**
  * Where a card sits for a given level: 0 is the front, 1 and 2 the tilted cards behind it
- * (Figma 223:21704-5: 302 x 259 tilted -2deg 23 from the top, then 254 x 200 tilted 2deg at 0), 3 is gone
- * behind them, and -1 is gone above: shrunk, lifted and faded, as in assets/deckscroll.mp4.
- * Offsets are from the front card's centre (300 tall, 52 from the top of the stack).
+ * (Figma 300:25117-8: 302 x 259 tilted -2deg with its top 28.4 down, then 254 x 200 tilted 2deg
+ * with its top 4.4 down, for a 394 front), 3 is gone behind them, and -1 is gone above: shrunk,
+ * lifted and faded, as in assets/deckscroll.mp4. Offsets are from the front card's centre (52
+ * from the top of the stack); on a shorter card the ones behind shrink in step.
  */
-const pose = (level: number, count: number) => {
+const pose = (level: number, count: number, h: number) => {
   'worklet';
+  const h1 = (h * 259) / 394;
+  const h2 = (h * 200) / 394;
+  const c = 52 + h / 2;
   if (level < 0) {
     const p = Math.min(1, -level);
     // The clip clears the leaving card early: it is gone by two thirds of the step.
@@ -109,9 +118,9 @@ const pose = (level: number, count: number) => {
   }
   const l = Math.min(level, 2);
   return {
-    ty: interpolate(l, [0, 1, 2], [0, -44.5, -98]),
+    ty: interpolate(l, [0, 1, 2], [0, 28.37 + h1 / 2 - c, 4.37 + h2 / 2 - c]),
     sx: interpolate(l, [0, 1, 2], [1, 302 / 350, 254 / 350]),
-    sy: interpolate(l, [0, 1, 2], [1, 259 / 300, 200 / 300]),
+    sy: interpolate(l, [0, 1, 2], [1, 259 / 394, 200 / 394]),
     rot: interpolate(l, [0, 1, 2], [0, -2, 2]),
     // Three cards show at most, and never more than the stack holds: 1 card, no tilted ones.
     opacity: Math.min(interpolate(level, [2, 3], [1, 0], Extrapolation.CLAMP), interpolate(level, [count - 1, count], [1, 0], Extrapolation.CLAMP)),
@@ -138,7 +147,7 @@ const PICK = 4;
  * slides `head` one place; nothing is reordered, so there is nothing to snap back and no flicker.
  * Sideways swipes run `actions`; press, then drag, carries the top card into `drop`.
  */
-export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, surface = 'table', focusId }: Props) {
+export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, surface = 'table', focusId, cardH = CARD_H }: Props) {
   const s = useStyles();
   const n = cards.length;
   const step = motion.stackScroll;
@@ -178,10 +187,10 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   /** The front card's centre in the window as the drag began, and where the finger held it. */
   const origin = useSharedValue({ x: 0, y: 0 });
   const grab = useSharedValue({ x: 0, y: 0, set: 0 });
-  const topHV = useSharedValue(300);
+  const topHV = useSharedValue(cardH);
   const stackRef = useAnimatedRef<Animated.View>();
   const [back, setBack] = useState<'story' | 'delete'>('story');
-  const [topH, setTopHState] = useState(300);
+  const [topH, setTopHState] = useState(cardH);
   const [stackW, setStackW] = useState(350);
   const setTopH = (h: number) => { setTopHState(h); topHV.set(h); };
 
@@ -519,6 +528,8 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
               head={head}
               count={n}
               surface={surface}
+              topHV={topHV}
+              cardH={cardH}
               hand={front ? hand : undefined}
               back={front ? back : 'story'}
               answers={front ? answer?.(card) : undefined}
@@ -554,8 +565,9 @@ function Morph({ card, width, height, hand, grab }: { card: Card; width: number;
   const spec = t.tones[toneFor(card)];
   const { tx, ty, morph, landing } = hand;
 
-  // The card's own face, closing in on its middle: the outline shrinks and rounds to a circle
-  // while the colors and lights stay put behind it, so it is the card itself becoming the circle.
+  // The card's own face, closing in on its middle: the outline shrinks to the pill's token, a
+  // rounded square tilted -4deg (Figma 300:25413), while the colors and lights stay put behind it,
+  // so it is the card itself becoming the token.
   const box = useAnimatedStyle(() => {
     const m = morph.value;
     const w = interpolate(m, [0, 1], [width, CIRCLE]);
@@ -566,12 +578,12 @@ function Morph({ card, width, height, hand, grab }: { card: Card; width: number;
       height: h,
       left: width / 2 - w / 2,
       top: 52 + height / 2 - h / 2,
-      borderRadius: interpolate(m, [0, 1], [24, CIRCLE / 2]),
+      borderRadius: interpolate(m, [0, 1], [24, TOKEN_R * (CIRCLE / TOKEN)]),
       transform: [
         { translateX: tx.value + grab.value.x * m },
         { translateY: ty.value + grab.value.y * m },
-        { rotate: `${(tx.value / 18) * (1 - m) * (1 - landing.value)}deg` },
-        { scale: 1 - landing.value * (1 - 32 / CIRCLE) },
+        { rotate: `${(tx.value / 18) * (1 - m) * (1 - landing.value) - 4 * m}deg` },
+        { scale: 1 - landing.value * (1 - TOKEN / CIRCLE) },
       ],
     };
   });
@@ -604,6 +616,8 @@ type LayerProps = {
   head: SharedValue<number>;
   count: number;
   surface: 'table' | 'drawer';
+  topHV: SharedValue<number>;
+  cardH: number;
   /** Only the front card gets the finger, the flip and its buttons. */
   hand?: HandValues;
   back: 'story' | 'delete';
@@ -618,7 +632,7 @@ type LayerProps = {
 };
 
 /** One card on the strip. Its place in the stack is pos - head; the front one also follows the finger. */
-function Layer({ pos, card, head, count, surface, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps, nudge }: LayerProps) {
+function Layer({ pos, card, head, count, surface, topHV, cardH, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps, nudge }: LayerProps) {
   const t = useTheme();
   const s = useStyles();
   const shades = t.color.stack[surface];
@@ -636,7 +650,7 @@ function Layer({ pos, card, head, count, surface, hand, back, answers, footer, o
 
   const level = useDerivedValue(() => (detached.value ? 0 : pos - head.value));
   const layer = useAnimatedStyle(() => {
-    const p = pose(level.value, count);
+    const p = pose(level.value, count, topHV.value);
     const k = (1 + lifted.value * 0.03) * (1 - over.value * 0.25 * (morph.value > 0 ? 0 : 1)) * (1 - landing.value * 0.5);
     const tilt = detached.value * (1 - landing.value);
     return {
@@ -651,10 +665,10 @@ function Layer({ pos, card, head, count, surface, hand, back, answers, footer, o
     };
   });
   const shade = useAnimatedStyle(() => ({
-    opacity: pose(level.value, count).shade,
+    opacity: pose(level.value, count, topHV.value).shade,
     backgroundColor: interpolateColor(level.value, [1, 2], [shades[1], shades[0]]),
   }));
-  const plate = useAnimatedStyle(() => ({ opacity: 1 - pose(level.value, count).shade }));
+  const plate = useAnimatedStyle(() => ({ opacity: 1 - pose(level.value, count, topHV.value).shade }));
   const faces = {
     front: useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [0, 180])}deg` }] })),
     rear: useAnimatedStyle(() => ({ transform: [{ perspective: 900 }, { rotateY: `${interpolate(flip.value, [0, 1], [180, 360])}deg` }] })),
@@ -684,6 +698,7 @@ function Layer({ pos, card, head, count, surface, hand, back, answers, footer, o
         answers={answers}
         footer={footer}
         shadow={false}
+        minHeight={cardH}
         onUpdate={onUpdate}
         onDelete={onDelete}
         onCancelDelete={onCancelDelete}

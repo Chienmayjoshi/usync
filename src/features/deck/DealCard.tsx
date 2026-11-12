@@ -16,8 +16,8 @@ import { Text } from '@/ui/Text';
 import { type Card, forMe, isQuick } from './model';
 import { toneFor } from './taskTone';
 
-/** Figma card: 350 x 300. */
-export const CARD_H = 300;
+/** Figma card (300:25604): 350 x 394 on an 844 tall phone; shorter screens get a shorter card. */
+export const CARD_H = 394;
 
 /** Text on the full color face (Figma: white). */
 const CARD_INK = '#FFFFFF';
@@ -103,16 +103,18 @@ export function DealCard({ card, flip, back = 'story', answers, onUpdate, onDele
             </View>
           )}
         </View>
-        <Text variant="display/xl" color={CARD_INK} style={s.title}>{card.title}</Text>
-        {card.status === 'waiting' ? (
-          <View style={s.waiting}><Text variant="label/md" color={CARD_INK}>Waiting on someone else</Text></View>
-        ) : (
-          <Text variant="body/md" color={CARD_INK}>{meta}</Text>
-        )}
+        <Text style={s.title} color={CARD_INK}>{card.title}</Text>
         {nudge && (
           <View style={s.nudge}>
             <Text style={s.nudgeText} numberOfLines={2}>{nudge.line}</Text>
           </View>
+        )}
+        {/* Figma 300:25604: the title block at the top, the details pinned to the bottom edge. */}
+        <View style={s.spacer} />
+        {card.status === 'waiting' ? (
+          <View style={s.waiting}><Text variant="label/md" color={CARD_INK}>Waiting on someone else</Text></View>
+        ) : (
+          <Text style={s.meta} color={CARD_INK}>{meta}</Text>
         )}
         {asking && answers && (
           <View style={s.answers}>
@@ -190,7 +192,9 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.color.bg.raised, borderRadius: 24, borderWidth: 1.5, borderColor: t.color.border.card,
     paddingTop: 40, paddingHorizontal: 24, paddingBottom: 24, gap: 16, overflow: 'hidden', boxShadow: t.shadow.deal,
   },
-  title: { lineHeight: 40 },
+  // Figma 300:25614: Satoshi Black 32/40, -0.64 tracking, sentence case; 24 under the avatars.
+  title: { fontFamily: 'Satoshi-Black', fontSize: 32, lineHeight: 40, letterSpacing: -0.64, marginTop: 8 },
+  meta: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 19 },
   // The partner's mascot peeks over the top right edge; its line sits in a white bubble.
   peek: { position: 'absolute', top: -26, right: 28, zIndex: 3, borderRadius: 22, borderWidth: 2, borderColor: '#FFFFFF' },
   // An ask: the partner's whole peep stands behind the card's top edge, shoulders up.
@@ -212,7 +216,7 @@ const useStyles = makeStyles((t) => ({
   waiting: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.24)', borderRadius: t.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   answers: { flexDirection: 'row', gap: 12, marginTop: 8 },
   updatePill: { backgroundColor: t.color.action.neutral, borderRadius: t.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
-  spacer: { flex: 1, minHeight: 8 },
+  spacer: { flex: 1, minHeight: 0 },
   timeline: { marginTop: 6 },
   event: { flexDirection: 'row', gap: 12 },
   rail: { width: 10, alignItems: 'center', paddingTop: 7 },
