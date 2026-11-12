@@ -8,7 +8,7 @@ import { haptics } from '@/theme/haptics';
 import { ease } from '@/theme/motion';
 import { makeStyles } from '@/theme/ThemeProvider';
 
-import { HeartLineIcon, SyncLineIcon, TableFillIcon } from './NavIcons';
+import { HeartFillIcon, HeartLineIcon, SyncFillIcon, SyncLineIcon, TableFillIcon, TableLineIcon } from './NavIcons';
 import { Text } from './Text';
 
 /**
@@ -32,10 +32,13 @@ const NAV_INK = '#1A1A1A';
 
 // labelW: the label's width in Satoshi Bold 16, so icon and label sit centred in the 120 (Figma
 // pads 14 / 18, which puts the Table icon 24 in and its label at 52).
-const TABS: Record<string, { icon: typeof TableFillIcon; label: string; iconW: number; labelW: number }> = {
-  index: { icon: TableFillIcon, label: 'Table', iconW: 20, labelW: 40 },
-  us: { icon: HeartLineIcon, label: 'Partner', iconW: 25.2, labelW: 56 },
-  sync: { icon: SyncLineIcon, label: 'Sync', iconW: 24, labelW: 36 },
+// Figma 300:25680: the active tab's icon is filled and dark, the idle ones outlined in white;
+// idleW is the outline's width (the heart's runs 25.2), iconW the filled one's.
+type Icon = typeof TableFillIcon;
+const TABS: Record<string, { icon: Icon; idle: Icon; label: string; iconW: number; idleW: number; labelW: number }> = {
+  index: { icon: TableFillIcon, idle: TableLineIcon, label: 'Table', iconW: 20, idleW: 20, labelW: 40 },
+  us: { icon: HeartFillIcon, idle: HeartLineIcon, label: 'Partner', iconW: 24, idleW: 25.2, labelW: 56 },
+  sync: { icon: SyncFillIcon, idle: SyncLineIcon, label: 'Sync', iconW: 24, idleW: 24, labelW: 36 },
 };
 const iconIn = (m: { iconW: number; labelW: number }) => (ACTIVE - m.iconW - 8 - m.labelW) / 2 - 2;
 
@@ -75,7 +78,11 @@ type TabProps = { index: number; pos: SharedValue<number>; meta: (typeof TABS)[s
 /** A tab grows from 64 to 120 as the highlight arrives; its label fades in where it will sit. */
 function Tab({ index, pos, meta, active, ink, idleInk, onPress }: TabProps) {
   const s = useStyles();
-  const Icon = meta.icon;
+  const Fill = meta.icon;
+  const Line = meta.idle;
+  const boxW = Math.max(meta.iconW, meta.idleW);
+  const idleX = (IDLE - boxW) / 2;
+  const activeX = iconIn({ iconW: boxW, labelW: meta.labelW });
   const box = useAnimatedStyle(() => {
     const w = Math.max(0, 1 - Math.abs(pos.value - index));
     return { width: IDLE + (ACTIVE - IDLE) * w };
@@ -83,21 +90,25 @@ function Tab({ index, pos, meta, active, ink, idleInk, onPress }: TabProps) {
   const icon = useAnimatedStyle(() => {
     const w = Math.max(0, 1 - Math.abs(pos.value - index));
     // Centred in 64 when idle; centred with its label in 120 when active (Figma 300:25873).
-    const idle = (IDLE - meta.iconW) / 2;
-    return { transform: [{ translateX: idle + (iconIn(meta) - idle) * w }] };
+    // Plain numbers worked out on the JS side: a worklet must not call a non-worklet function.
+    return { transform: [{ translateX: idleX + (activeX - idleX) * w }] };
   });
   const label = useAnimatedStyle(() => {
     const w = Math.max(0, 1 - Math.abs(pos.value - index));
     return { opacity: w * w };
   });
+  // The outline gives way to the filled icon as the white highlight slides under it.
+  const fill = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - Math.abs(pos.value - index)) }));
+  const line = useAnimatedStyle(() => ({ opacity: 1 - Math.max(0, 1 - Math.abs(pos.value - index)) }));
   return (
     <Pressable onPress={onPress} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={meta.label}>
       <Animated.View style={[s.tab, box]}>
-        <Animated.View style={[s.icon, icon]}>
-          <Icon color={active ? ink : idleInk} />
+        <Animated.View style={[s.icon, { width: boxW }, icon]}>
+          <Animated.View style={[s.glyph, line]}><Line color={idleInk} /></Animated.View>
+          <Animated.View style={[s.glyph, fill]}><Fill color={ink} /></Animated.View>
         </Animated.View>
         {/* 8 after the icon (Figma 300:25878). */}
-        <Animated.View style={[s.label, { left: iconIn(meta) + meta.iconW + 8 }, label]}>
+        <Animated.View style={[s.label, { left: activeX + boxW + 8 }, label]}>
           <Text variant="title/md" color={ink} style={s.labelText} numberOfLines={1}>{meta.label}</Text>
         </Animated.View>
       </Animated.View>
@@ -127,7 +138,8 @@ const useStyles = makeStyles((t) => {
       backgroundColor: '#FFFFFF',
     },
     tab: { height: 56, justifyContent: 'center', overflow: 'hidden' },
-    icon: { position: 'absolute', left: 0, top: 16 },
+    icon: { position: 'absolute', left: 0, top: 16, height: 24 },
+    glyph: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
     label: { position: 'absolute', top: 17 },
     labelText: { fontFamily: 'Satoshi-Bold', fontSize: 16, lineHeight: 22, letterSpacing: -0.032 },
   };

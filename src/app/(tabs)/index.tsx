@@ -21,6 +21,7 @@ import { haptics } from '@/theme/haptics';
 import { motion } from '@/theme/motion';
 import { UpdateSheet } from '@/features/update/UpdateSheet';
 import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { HEADER_TOP } from '@/ui/Screen';
 import { navBottom, NAV_H } from '@/ui/TabBar';
 import { Text } from '@/ui/Text';
 
@@ -79,7 +80,7 @@ export default function TableScreen() {
   const solo = !partner;
   const table = solo ? [...deckCards(state), ...tableCards(state)] : tableCards(state);
   const deck = deckCards(state);
-  const headerTop = insets.top + 18;
+  const headerTop = insets.top + HEADER_TOP;
   const pillBottom = navBottom(insets.bottom) + NAV_H + PILL_ABOVE_NAV;
   const them = names.partnerOr;
   // Figma's card is 394 tall on an 844 phone, 24 clear of the pill. A shorter phone gets a shorter
