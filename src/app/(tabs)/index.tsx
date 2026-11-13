@@ -120,7 +120,6 @@ export default function TableScreen() {
               left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
             }}
             drop={solo ? undefined : { rect, slot, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
-            onDelete={(c) => move(c, 'delete')}
             onUpdate={setUpdating}
           />
         ) : (

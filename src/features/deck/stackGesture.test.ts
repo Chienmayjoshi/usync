@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { dropCommits, HOLD_MS, intentOf, stepCommits } from './stackGesture';
+import { dropCommits, HOLD_MS, intentOf, sideCommits, stepCommits } from './stackGesture';
 
 describe('intentOf', () => {
   it('reads quick moves by direction', () => {
@@ -39,5 +39,20 @@ describe('dropCommits', () => {
     expect(dropCommits(0.4, false, 1000)).toBe(true);
     expect(dropCommits(0.4, false, 200)).toBe(false);
     expect(dropCommits(0.1, false, 2000)).toBe(false);
+  });
+});
+
+describe('sideCommits', () => {
+  it('commits on distance or a fling, each way', () => {
+    expect(sideCommits(70, 0)).toBe('right');
+    expect(sideCommits(-70, 0)).toBe('left');
+    expect(sideCommits(20, 600)).toBe('right');
+    expect(sideCommits(-20, -600)).toBe('left');
+  });
+
+  it('lets a drift or a fling back to the middle spring home', () => {
+    expect(sideCommits(30, 100)).toBeNull();
+    expect(sideCommits(-30, 800)).toBeNull();
+    expect(sideCommits(0, 0)).toBeNull();
   });
 });

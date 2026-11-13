@@ -29,7 +29,7 @@ import { useNow } from '@/features/mascot/useNow';
 
 import { CARD_H, type CardAnswers, type CardNudge, DealCard, toneFor } from './DealCard';
 import { type Card, forMe } from './model';
-import { DELETE_MS, dropCommits, HOLD_MS, intentOf, stepCommits } from './stackGesture';
+import { dropCommits, HOLD_MS, intentOf, SIDE_DISTANCE, sideCommits, stepCommits } from './stackGesture';
 
 export type Dir = 'left' | 'right';
 export type SwipeAction = { label: string; color: string; run: (card: Card) => void };
@@ -72,8 +72,6 @@ type Props = {
   actions: Partial<Record<Dir, SwipeAction>>;
   /** Press, then drag the card here to take it. */
   drop?: DropTarget;
-  /** Hold flips the card to "Delete task?". */
-  onDelete?: (card: Card) => void;
   onUpdate?: (card: Card) => void;
   answer?: (card: Card) => CardAnswers | undefined;
   footer?: (card: Card) => ReactNode;
@@ -83,8 +81,6 @@ type Props = {
   focusId?: string;
 };
 
-const THRESHOLD = 110;
-const FLING = 900;
 /**
  * The stack moving a place, and anything let go that springs home: the reference's spring
  * (methodical-plans-198864.framer.app: stiffness 170, damping 26). Interruptible, so quick swipes
@@ -154,7 +150,7 @@ const DRAG = 3;
  * slides `head` one place; nothing is reordered, so there is nothing to snap back and no flicker.
  * Sideways swipes run `actions`; press, then drag, carries the top card into `drop`.
  */
-export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, footer, focusId, cardH = CARD_H }: Props) {
+export function CardStack({ cards, actions, drop, onUpdate, answer, footer, focusId, cardH = CARD_H }: Props) {
   const s = useStyles();
   const n = cards.length;
 
@@ -191,10 +187,8 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const mode = useSharedValue(IDLE);
   /** When the finger came down, so a press-and-hold can be told from a quick swipe. */
   const beganAt = useSharedValue(0);
-  const holding = useSharedValue(0);
   /** 1 while the card is carried by hand (swipe or drag), so a scroll of the stack leaves it be. */
   const detached = useSharedValue(0);
-  const deleting = useSharedValue(0);
   /** 0 card .. 1 circle, while carried toward the drop target. */
   const morph = useSharedValue(0);
   /** The front card's centre in the window as the drag began, and where the finger held it. */
@@ -202,7 +196,6 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const grab = useSharedValue({ x: 0, y: 0, set: 0 });
   const topHV = useSharedValue(cardH);
   const stackRef = useAnimatedRef<Animated.View>();
-  const [back, setBack] = useState<'story' | 'delete'>('story');
   const [topH, setTopHState] = useState(cardH);
   const [stackW, setStackW] = useState(350);
   const setTopH = (h: number) => { setTopHState(h); topHV.set(h); };
@@ -251,14 +244,12 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     // The saved copy of a card you just added taking its place: the same card, no second deal-in.
     if (prev.id?.startsWith('drop-') && top?.id && !top.id.startsWith('drop-')) return;
     flip.set(0);
-    deleting.set(0);
-    setBack('story');
     if (at.H !== prev.H) return;
     ty.set(-40);
     enter.set(0);
     ty.set(withTiming(0, motion.dealIn));
     enter.set(withTiming(1, { duration: 180 }));
-  }, [top?.id, at.H, flip, deleting, ty, enter]);
+  }, [top?.id, at.H, flip, ty, enter]);
 
   /** The front moved to `p` (told as the step starts, so React keeps up with fast swipes). */
   const moved = (p: number) => {
@@ -356,20 +347,10 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     grab.set({ x: 0, y: 0, set: 0 });
   };
 
-  const openDelete = () => {
-    'worklet';
-    if (!onDelete || flip.value > 0.5) return;
-    deleting.set(1);
-    lifted.set(withTiming(0, motion.release));
-    scheduleOnRN(setBack, 'delete');
-    scheduleOnRN(haptics.take);
-    flip.set(withTiming(1, motion.flip));
-  };
-
   /**
    * One pan for everything. Quick moves: sideways swipes the card, up sends it to the back, down
    * brings back the one that went there last. Press and keep still a moment first, then move:
-   * the card lifts and is carried, to be dropped into My Tasks. Keep still longer: delete.
+   * the card lifts and is carried, to be dropped into My Tasks.
    */
   const pan = usePanGesture({
     activeOffsetX: [-8, 8],
@@ -378,15 +359,11 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
       'worklet';
       beganAt.set(Date.now());
       if (flip.value > 0.5 || landing.value > 0) return;
-      // The lift says "you can carry it now"; holding on asks to delete it.
+      // The lift says "you can carry it now".
       if (canDrop) lifted.set(withDelay(HOLD_MS, withTiming(1, motion.press)));
-      holding.set(0);
-      holding.set(withDelay(DELETE_MS, withTiming(1, { duration: 0 }, (done) => { if (done && mode.value === IDLE) openDelete(); })));
     },
     onActivate: (e) => {
       'worklet';
-      cancelAnimation(holding);
-      holding.set(0);
       if (flip.value > 0.5 || landing.value > 0) { mode.set(IDLE); return; }
       const intent = intentOf(e.translationX, e.translationY, Date.now() - beganAt.value, canDrop);
       if (intent === 'drag') {
@@ -423,7 +400,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
       if (m === SWIPE) {
         tx.set(e.translationX);
         ty.set(e.translationY * 0.3);
-        const past = (can.right && e.translationX > THRESHOLD) || (can.left && e.translationX < -THRESHOLD) ? 1 : 0;
+        const past = (can.right && e.translationX > SIDE_DISTANCE) || (can.left && e.translationX < -SIDE_DISTANCE) ? 1 : 0;
         if (past !== armed.value) { armed.set(past); if (past) scheduleOnRN(haptics.tick); }
         return;
       }
@@ -462,8 +439,10 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
         return settle();
       }
       if (m === SWIPE) {
-        if (can.right && (e.translationX > THRESHOLD || e.velocityX > FLING)) return fly('right');
-        if (can.left && (e.translationX < -THRESHOLD || e.velocityX < -FLING)) return fly('left');
+        // As light as the up and down swipes: a short push or a flick the way it leans.
+        const side = sideCommits(e.translationX, e.velocityX);
+        if (side === 'right' && can.right) return fly('right');
+        if (side === 'left' && can.left) return fly('left');
         return settle();
       }
       if (m === DRAG) {
@@ -475,7 +454,6 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     },
     onFinalize: () => {
       'worklet';
-      cancelAnimation(holding);
       // Cancelled mid-move (another gesture or the system took over): put the card back.
       if (mode.value !== IDLE) { mode.set(IDLE); armed.set(0); settle(); }
       if (dropNow) dropNow.ready.set(withTiming(0, { duration: 160 }));
@@ -491,21 +469,12 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
     maxDuration: HOLD_MS - 10,
     onActivate: () => {
       'worklet';
-      if (deleting.value) return;
       flip.set(withTiming(flip.value > 0.5 ? 0 : 1, motion.flip));
       scheduleOnRN(haptics.tick);
     },
   });
 
   const gesture = useCompetingGestures(pan, tap);
-
-  const closeDelete = () => {
-    flip.set(withTiming(0, motion.flip, (done) => {
-      if (!done) return;
-      deleting.set(0);
-      scheduleOnRN(setBack, 'story');
-    }));
-  };
 
   // Screen readers get the same moves without gestures.
   const stepBy = (by: -1 | 1) => {
@@ -529,7 +498,7 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
   const a11y = [
     actionsNow.right && `Swipe right: ${actionsNow.right.label}.`, actionsNow.left && `Swipe left: ${actionsNow.left.label}.`,
     can.scroll && 'Swipe up for the next card, down for the previous one.', dropNow && 'Press, then drag into My Deck to take it.',
-    'Tap to flip.', onDelete && 'Hold to delete.',
+    'Tap to flip.',
   ].filter(Boolean).join(' ');
 
   return (
@@ -556,12 +525,9 @@ export function CardStack({ cards, actions, drop, onDelete, onUpdate, answer, fo
               topHV={topHV}
               cardH={cardH}
               hand={front ? hand : undefined}
-              back={front ? back : 'story'}
               answers={front ? answer?.(card) : undefined}
               footer={footer?.(card)}
               onUpdate={front && onUpdate ? () => onUpdate(card) : undefined}
-              onDelete={front && onDelete ? () => onDelete(card) : undefined}
-              onCancelDelete={front ? closeDelete : undefined}
               onHeight={front ? setTopH : undefined}
               stamps={front ? actionsNow : undefined}
               nudge={front ? topNudge : undefined}
@@ -647,19 +613,16 @@ type LayerProps = {
   cardH: number;
   /** Only the front card gets the finger, the flip and its buttons. */
   hand?: HandValues;
-  back: 'story' | 'delete';
   answers?: CardAnswers;
   footer?: ReactNode;
   onUpdate?: () => void;
-  onDelete?: () => void;
-  onCancelDelete?: () => void;
   onHeight?: (h: number) => void;
   stamps?: Partial<Record<Dir, SwipeAction>>;
   nudge?: CardNudge;
 };
 
 /** One card on the strip. Its place in the stack is pos - head; the front one also follows the finger. */
-function Layer({ pos, card, head, count, leave, topHV, cardH, hand, back, answers, footer, onUpdate, onDelete, onCancelDelete, onHeight, stamps, nudge }: LayerProps) {
+function Layer({ pos, card, head, count, leave, topHV, cardH, hand, answers, footer, onUpdate, onHeight, stamps, nudge }: LayerProps) {
   const s = useStyles();
   const zero = useSharedValue(0);
   const one = useSharedValue(1);
@@ -702,7 +665,7 @@ function Layer({ pos, card, head, count, leave, topHV, cardH, hand, back, answer
   };
   const fade = (on: boolean, v: number) => {
     'worklet';
-    return { opacity: on && !landing.value && !over.value ? interpolate(v, [20, THRESHOLD], [0, 1], Extrapolation.CLAMP) : 0 };
+    return { opacity: on && !landing.value && !over.value ? interpolate(v, [20, SIDE_DISTANCE], [0, 1], Extrapolation.CLAMP) : 0 };
   };
   const stampRight = useAnimatedStyle(() => fade(!!stamps?.right, tx.value));
   const stampLeft = useAnimatedStyle(() => fade(!!stamps?.left, -tx.value));
@@ -721,14 +684,11 @@ function Layer({ pos, card, head, count, leave, topHV, cardH, hand, back, answer
       <DealCard
         card={card}
         flip={flip}
-        back={back}
         answers={answers}
         footer={footer}
         shadow={false}
         minHeight={cardH}
         onUpdate={onUpdate}
-        onDelete={onDelete}
-        onCancelDelete={onCancelDelete}
         nudge={nudge}
       />
       <Animated.View style={[s.shade, shade]} pointerEvents="none" />

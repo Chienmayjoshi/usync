@@ -37,3 +37,19 @@ export function dropCommits(morph: number, over: boolean, vy: number): boolean {
   'worklet';
   return over || morph > 0.6 || (morph > 0.3 && vy > 900);
 }
+
+/** A sideways swipe (do it together / ask) commits this far out, or on a fling this fast. */
+export const SIDE_DISTANCE = 64;
+export const SIDE_FLING = 500;
+
+/**
+ * Which way a sideways swipe goes, if it goes at all: far enough out, or flung the way the card
+ * already leans. A fling back toward the middle never commits.
+ */
+export function sideCommits(dx: number, vx: number): 'right' | 'left' | null {
+  'worklet';
+  const dir = dx !== 0 ? Math.sign(dx) : Math.sign(vx);
+  if (dir === 0) return null;
+  if (Math.abs(dx) > SIDE_DISTANCE || vx * dir > SIDE_FLING) return dir > 0 ? 'right' : 'left';
+  return null;
+}
