@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAvatars, shareInvite } from '@/features/account/HeaderAvatars';
 import { useAccount, useNames } from '@/features/account/account';
+import { CardDetail } from '@/features/deck/CardDetail';
 import { CardStack, type Rect } from '@/features/deck/CardStack';
 import { DeckList } from '@/features/deck/DeckList';
 import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
@@ -41,6 +42,7 @@ export default function TableScreen() {
   const move = useMoves();
   useMascotPrompt();
   const [updating, setUpdating] = useState<Card | null>(null);
+  const [opened, setOpened] = useState<{ card: Card; from: Rect } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const open = useSharedValue(0);
   const rect = useSharedValue<Rect>({ x: -1000, y: -1000, w: 0, h: 0 });
@@ -112,12 +114,14 @@ export default function TableScreen() {
           <CardStack
             cards={table}
             cardH={cardH}
+            onOpen={(card, from) => setOpened({ card, from })}
+            opened={!!opened}
             focusId={expanded ? undefined : focusId}
             actions={solo ? {
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
             } : {
-              right: { label: 'Do it together', color: t.color.action.positive, run: (c) => move(c, 'together') },
-              left: { label: `Ask ${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
+              right: { label: 'Do it together', stamp: 'Doing It\nTogether', color: t.color.action.positive, run: (c) => move(c, 'together') },
+              left: { label: `Ask ${them}`, stamp: `Ask\n${them}`, color: t.color.action.negative, run: (c) => move(c, 'ask') },
             }}
             drop={solo ? undefined : { rect, slot, ready: trayReady, hot, onDrop: (c) => move(c, 'grab') }}
             onUpdate={setUpdating}
@@ -158,6 +162,7 @@ export default function TableScreen() {
 
       {!solo && <DeckPill cards={deck} open={expanded} onToggle={toggle} bottom={pillBottom} rect={rect} slot={slot} ready={trayReady} hot={hot} peek={peek} />}
 
+      {opened && <CardDetail card={opened.card} from={opened.from} onClosed={() => setOpened(null)} onUpdate={setUpdating} />}
       {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </View>
   );
