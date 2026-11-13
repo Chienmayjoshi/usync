@@ -98,7 +98,9 @@ export function CardDetail({ card, from, onClosed, onUpdate }: Props) {
   const panel = useAnimatedStyle(() => {
     const full = reduced ? 1 : p.value;
     return {
-      opacity: reduced ? p.value : 1,
+      // The real card stays in the stack underneath. Near its own size the panel is see-through, so
+      // opening starts from the card itself and closing ends on it: a crossfade, never an empty card.
+      opacity: reduced ? p.value : interpolate(p.value, [0, 0.22], [0, 1], Extrapolation.CLAMP),
       // Edges, not size: open, every edge is exactly 0, whatever size the screen turns out to be.
       left: interpolate(full, [0, 1], [from.x, 0]),
       top: interpolate(full, [0, 1], [from.y, 0]),

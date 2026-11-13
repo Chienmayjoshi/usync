@@ -83,8 +83,6 @@ type Props = {
   focusId?: string;
   /** Tap: open the front card full screen, growing from where it sits (window coordinates). */
   onOpen?: (card: Card, from: Rect) => void;
-  /** While it is open, the front card is hidden here, so it looks like the card itself grew. */
-  opened?: boolean;
 };
 
 /**
@@ -160,7 +158,7 @@ const DRAG = 3;
  * slides `head` one place; nothing is reordered, so there is nothing to snap back and no flicker.
  * Sideways swipes run `actions`; press, then drag, carries the top card into `drop`.
  */
-export function CardStack({ cards, actions, drop, onUpdate, answer, footer, focusId, cardH = CARD_H, onOpen, opened = false }: Props) {
+export function CardStack({ cards, actions, drop, onUpdate, answer, footer, focusId, cardH = CARD_H, onOpen }: Props) {
   const s = useStyles();
   const n = cards.length;
 
@@ -536,7 +534,6 @@ export function CardStack({ cards, actions, drop, onUpdate, answer, footer, focu
               head={head}
               count={n}
               leave={leave}
-              hidden={front && opened}
               topHV={topHV}
               cardH={cardH}
               hand={front ? hand : undefined}
@@ -624,8 +621,6 @@ type LayerProps = {
   head: SharedValue<number>;
   count: number;
   leave: LeaveValues;
-  /** The front card while it is open full screen. */
-  hidden?: boolean;
   topHV: SharedValue<number>;
   cardH: number;
   /** Only the front card gets the finger, the flip and its buttons. */
@@ -639,7 +634,7 @@ type LayerProps = {
 };
 
 /** One card on the strip. Its place in the stack is pos - head; the front one also follows the finger. */
-function Layer({ pos, card, head, count, leave, hidden = false, topHV, cardH, hand, answers, footer, onUpdate, onHeight, stamps, nudge }: LayerProps) {
+function Layer({ pos, card, head, count, leave, topHV, cardH, hand, answers, footer, onUpdate, onHeight, stamps, nudge }: LayerProps) {
   const s = useStyles();
   const zero = useSharedValue(0);
   const one = useSharedValue(1);
@@ -663,7 +658,7 @@ function Layer({ pos, card, head, count, leave, hidden = false, topHV, cardH, ha
     const k = (1 + lifted.value * 0.03 + up * 0.05) * (1 - over.value * 0.25 * (morph.value > 0 ? 0 : 1)) * (1 - landing.value * 0.5);
     const swing = detached.value * (1 - landing.value);
     return {
-      opacity: hidden ? 0 : p.opacity * enter.value * (1 - interpolate(morph.value, [0, 0.12], [0, 1], Extrapolation.CLAMP)),
+      opacity: p.opacity * enter.value * (1 - interpolate(morph.value, [0, 0.12], [0, 1], Extrapolation.CLAMP)),
       transform: [
         { translateX: tx.value },
         { translateY: p.ty + ty.value + (leaving ? leave.ty.value : 0) },

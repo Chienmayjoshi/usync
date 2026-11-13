@@ -115,7 +115,6 @@ export default function TableScreen() {
             cards={table}
             cardH={cardH}
             onOpen={(card, from) => setOpened({ card, from })}
-            opened={!!opened}
             focusId={expanded ? undefined : focusId}
             actions={solo ? {
               right: { label: 'Done', color: t.color.action.positive, run: (c) => move(c, 'done') },
