@@ -29,14 +29,12 @@ import { toneFor } from './taskTone';
 import type { Card } from './model';
 
 // Figma "ui update 3" (300:25147, 300:25405, 300:25526): the pill is 64 tall inside a 3 padding
-// ring; 233 wide with the hint, 270 with tasks or while a card is carried, and "Go back to Table"
-// while the list is open.
+// ring; 233 wide with the hint, 270 with tasks or while a card is carried. While My Deck is open
+// it goes away with the nav (Figma 355:30606); "Go back to table" is its own button there.
 const H = 64;
 const PAD = 3;
 const W_EMPTY = 233;
 const W_FULL = 270;
-/** While the list is open: "(down arrow) Go back to Table", sized to its words. */
-const W_OPEN = 184;
 /** The tokens: the newest task 40 square tilted -4deg, the one before it 32 tilted 3deg (Figma 300:25534). */
 const TOKEN = 40;
 const TOKEN_BACK = 32;
@@ -87,8 +85,6 @@ function RingDash({ len, lap, hot, color }: { len: number; lap: SharedValue<numb
 
 type Props = {
   cards: Card[];
-  /** The list is open: the pill becomes its close button. */
-  open: boolean;
   onToggle: () => void;
   /** Distance from the screen bottom to the pill's bottom edge. */
   bottom: number;
@@ -112,9 +108,9 @@ const pop = () => {
 /**
  * My Deck as a small pill under the Table (Figma 239:23498, notes 239:23499): "Drag a task here
  * to take it" when empty, the deck's colors when not, and while a card is carried it widens,
- * a green ring runs round it and it points down. Tap it to open the list; it then turns into "Go back to Table".
+ * a green ring runs round it and it points down. Tap it to open My Deck.
  */
-export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot, peek }: Props) {
+export function DeckPill({ cards, onToggle, bottom, rect, slot, ready, hot, peek }: Props) {
   const t = useTheme();
   const s = useStyles();
   const p = t.color.pill;
@@ -124,12 +120,10 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   useEffect(() => { count.set(cards.length); }, [cards.length, count]);
 
   const base = useSharedValue(has ? W_FULL : W_EMPTY);
-  const shut = useSharedValue(open ? 1 : 0);
   const filled = useSharedValue(has ? 1 : 0);
   const bob = useSharedValue(0);
   const lap = useSharedValue(0);
   useEffect(() => { base.set(withTiming(has ? W_FULL : W_EMPTY, motion.panel)); filled.set(withTiming(has ? 1 : 0, motion.release)); }, [has, base, filled]);
-  useEffect(() => { shut.set(withTiming(open ? 1 : 0, motion.panel)); }, [open, shut]);
 
   // Where cards can be dropped: measured as a drag starts, so it is right whatever moved.
   useAnimatedReaction(() => ready.value > 0, (on, was) => {
@@ -152,21 +146,19 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
   });
 
   const wrap = useAnimatedStyle(() => {
-    const w = interpolate(ready.value, [0, 1], [base.value, W_FULL]);
     return {
-      width: interpolate(shut.value, [0, 1], [w, W_OPEN]),
+      width: interpolate(ready.value, [0, 1], [base.value, W_FULL]),
       transform: [{ scale: 1 + hot.value * 0.03 }],
     };
   });
-  const ring = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
-  const active = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
-  const idleEdge = useAnimatedStyle(() => ({ opacity: 1 - ready.value * (1 - shut.value) }));
-  const hint = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - filled.value) * (1 - shut.value) }));
-  const deck = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * filled.value * (1 - shut.value) }));
-  const drop = useAnimatedStyle(() => ({ opacity: ready.value * (1 - shut.value) }));
+  const ring = useAnimatedStyle(() => ({ opacity: ready.value }));
+  const active = useAnimatedStyle(() => ({ opacity: ready.value }));
+  const idleEdge = useAnimatedStyle(() => ({ opacity: 1 - ready.value }));
+  const hint = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - filled.value) }));
+  const deck = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * filled.value }));
+  const drop = useAnimatedStyle(() => ({ opacity: ready.value }));
   const chevrons = useAnimatedStyle(() => ({ transform: [{ translateY: bob.value * 3 }] }));
-  const close = useAnimatedStyle(() => ({ opacity: shut.value }));
-  const peeking = useAnimatedStyle(() => ({ opacity: (1 - ready.value) * (1 - shut.value), transform: [{ translateY: ready.value * 8 }] }));
+  const peeking = useAnimatedStyle(() => ({ opacity: 1 - ready.value, transform: [{ translateY: ready.value * 8 }] }));
 
 
   return (
@@ -174,7 +166,7 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
-        accessibilityLabel={open ? 'Go back to Table' : has ? `Open my deck, ${cards.length} ${cards.length === 1 ? 'task' : 'tasks'}` : 'My deck. Drag a task here to take it'}
+        accessibilityLabel={has ? `Open my deck, ${cards.length} ${cards.length === 1 ? 'task' : 'tasks'}` : 'My deck. Drag a task here to take it'}
       >
         <Animated.View ref={ref} style={[s.wrap, wrap]}>
           {peek && (
@@ -210,11 +202,6 @@ export function DeckPill({ cards, open, onToggle, bottom, rect, slot, ready, hot
             <Animated.View style={[s.layer, s.label, drop]} pointerEvents="none">
               <Animated.View style={chevrons}><ChevronsDownIcon color={p.icon} /></Animated.View>
               <Text style={s.text} color={p.ink}>Drop it here</Text>
-            </Animated.View>
-
-            <Animated.View style={[s.layer, s.label, close]} pointerEvents="none">
-              <View style={s.down}><ArrowUpIcon color={p.ink} /></View>
-              <Text style={s.text} color={p.ink} numberOfLines={1}>Go back to Table</Text>
             </Animated.View>
           </View>
         </Animated.View>
@@ -293,7 +280,6 @@ const useStyles = makeStyles(() => ({
   layer: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   split: { flexDirection: 'row', justifyContent: 'space-between', paddingLeft: 16, paddingRight: 20 },
   label: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  down: { transform: [{ rotate: '180deg' }] },
   text: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 19 },
   strong: { fontFamily: 'Satoshi-Bold', fontSize: 14, lineHeight: 19 },
   up: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

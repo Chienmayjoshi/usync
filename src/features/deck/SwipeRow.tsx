@@ -18,9 +18,9 @@ import type { CardAnswers } from './DealCard';
 import { toneFor } from './taskTone';
 import type { Card } from './model';
 
-// Figma 232:22739: rows are 8 + 48.9 + 8 tall with 4 above and below to the hairline; the swipe
-// block fills that whole 72 (239:22885). Content sits 12 past the block's edge.
-export const ROW_H = 72.9;
+// Figma 355:30674: rows are 8 + 48.9 + 8 tall, a 1px #EEEEEE hairline between them. The swipe
+// block fills the row 4 in from top and bottom (239:22885); content sits 12 past its edge.
+export const ROW_H = 64.9;
 const GAP = 12;
 const PANEL_INSET = 4;
 /** Past this share of the row the swipe commits (the block widens to take the row). */
@@ -30,6 +30,8 @@ const FLING = 800;
 type Props = {
   card: Card;
   first: boolean;
+  /** The last row has no hairline under it. */
+  last?: boolean;
   onDone?: () => void;
   onLater?: () => void;
   onOpen: () => void;
@@ -48,7 +50,7 @@ type Props = {
 };
 
 /** A My Deck row: swipe right for DONE, left for LATER (back to the table). Tap for its story. */
-export function SwipeRow({ card, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays, lit }: Props) {
+export function SwipeRow({ card, last, onDone, onLater, onOpen, answers, answerLabels, nudge, note, labels, laterStays, lit }: Props) {
   const t = useTheme();
   const names = useNames();
   const s = useStyles();
@@ -111,7 +113,8 @@ export function SwipeRow({ card, onDone, onLater, onOpen, answers, answerLabels,
     glow.set(withDelay(250, withTiming(0, { duration: 900, easing: ease.out })));
   }, [lit, glow]);
   const glowStyle = useAnimatedStyle(() => ({ opacity: glow.get() * 0.55 }));
-  const box = useAnimatedStyle(() => ({ height: ROW_H * height.value, opacity: height.value }));
+  const rowH = ROW_H + (last ? 0 : 1);
+  const box = useAnimatedStyle(() => ({ height: rowH * height.value, opacity: height.value }));
   // The row gives way to the block: its text narrows and ellipsizes, as in Figma, rather than sliding off.
   const content = useAnimatedStyle(() => ({ left: Math.max(0, tx.value), right: Math.max(0, -tx.value) }));
   // The block grows with the finger, 12 behind the content's edge (Figma 239:22885 / 239:22889).
@@ -134,9 +137,10 @@ export function SwipeRow({ card, onDone, onLater, onOpen, answers, answerLabels,
           <Animated.View style={[s.block, s.right, { backgroundColor: t.color.swipe.later }, later]}>
             <Animated.View style={laterLabel}><Text style={s.blockText} color={t.color.swipe.ink}>{labels?.later ?? 'LATER'}</Text></Animated.View>
           </Animated.View>
-          <Animated.View style={[s.content, { backgroundColor: t.tones[toneFor(card)].wash }, content]}>
+          <Animated.View style={[s.content, content]}>
             <Pressable onPress={onOpen} style={s.row} accessibilityRole="button" accessibilityHint="Opens this task's story" accessibilityActions={swipes ? [{ name: 'done', label: labels ? 'Reveal' : 'Done' }, { name: 'later', label: labels ? 'Reveal a day later' : 'Later, back to the table' }] : []} onAccessibilityAction={(e) => { if (e.nativeEvent.actionName === 'done') onDone?.(); if (e.nativeEvent.actionName === 'later') onLater?.(); }}>
-              <View style={s.icon}>
+              {/* Figma 355:30675: the task's own colour, so it reads as the card taken from the Table. */}
+              <View style={[s.icon, { backgroundColor: t.tones[toneFor(card)].card }]}>
                 <Image source={sticker.src} style={{ width: sticker.w, height: sticker.h }} resizeMode="contain" />
               </View>
               <View style={s.copy}>
@@ -147,7 +151,6 @@ export function SwipeRow({ card, onDone, onLater, onOpen, answers, answerLabels,
                   ? <Text style={s.meta} color={nudge.ink} numberOfLines={1}>{nudge.line}</Text>
                   : <Text style={s.meta} color={t.color.text.secondary} numberOfLines={1}>{meta}</Text>}
               </View>
-              {/* No face per row: the deck's one mascot speaks for it above the list (DeckMascot). */}
               {answers && answerLabels && (
                 <View style={s.answers}>
                   <PopButton label={answerLabels[0]} tone="ghost" small onPress={answers.onDecline} />
@@ -158,13 +161,14 @@ export function SwipeRow({ card, onDone, onLater, onOpen, answers, answerLabels,
           </Animated.View>
         </View>
       </GestureDetector>
+      {!last && <View style={[s.rule, { backgroundColor: t.color.divider }]} />}
       {/* Over the row, see-through: the light passes over it without hiding the words. */}
       <Animated.View pointerEvents="none" style={[s.glow, { backgroundColor: t.tones[names.colors.partner].glow[0] }, glowStyle]} />
     </Animated.View>
   );
 }
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((t) => ({
   item: { overflow: 'hidden' },
   glow: { position: 'absolute', left: -8, right: -8, top: 4, bottom: 4, borderRadius: 14 },
   track: { flex: 1, justifyContent: 'center' },
@@ -173,12 +177,13 @@ const useStyles = makeStyles(() => ({
   left: { left: 0 },
   right: { right: 0 },
   blockText: { fontFamily: 'Satoshi-Black', fontSize: 14, lineHeight: 19 },
-  // The task's own colour, washed out: the same task as its Table card (0012).
-  content: { position: 'absolute', top: PANEL_INSET, bottom: PANEL_INSET, borderRadius: 14, paddingHorizontal: 12, justifyContent: 'center' },
+  content: { position: 'absolute', top: 0, bottom: 0, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: GAP, paddingVertical: 8 },
-  icon: { width: 44, alignItems: 'center', justifyContent: 'center' },
+  // Figma 355:30675: 48 square, 12 corners.
+  icon: { width: 48, height: 48, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  rule: { height: 1 },
   copy: { flex: 1, gap: 4 },
-  title: { fontFamily: 'Satoshi-Bold', fontSize: 16, lineHeight: 22 },
+  title: { fontFamily: 'Satoshi-Bold', fontSize: 16, lineHeight: 22, color: t.color.text.primary },
   // Figma gives the meta line a 22.9 box (title 22 + 4 + 22.9 = the 48.9 text column).
   meta: { fontFamily: 'Satoshi-Medium', fontSize: 12, lineHeight: 16, height: 22.9 },
   answers: { flexDirection: 'row', gap: 6 },

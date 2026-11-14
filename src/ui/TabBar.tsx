@@ -8,14 +8,16 @@ import { haptics } from '@/theme/haptics';
 import { ease } from '@/theme/motion';
 import { makeStyles } from '@/theme/ThemeProvider';
 
+import { useNavChrome } from './navChrome';
+
 import { HeartFillIcon, HeartLineIcon, SyncFillIcon, SyncLineIcon, TableFillIcon, TableLineIcon } from './NavIcons';
 import { Text } from './Text';
 
 /**
- * Gap under the floating nav: Figma leaves 48 under it on a 34pt-inset iPhone, so it is the
- * system inset + 14 on both platforms. That also lifts it clear of Android's 3 button bar.
+ * Gap under the floating nav: Figma 355:30914 leaves 28 under it on a 34pt-inset iPhone, so it
+ * is the system inset - 6, never under 16. Android's 3 button bar inset still lifts it clear.
  */
-export const navBottom = (inset: number) => inset + 14;
+export const navBottom = (inset: number) => Math.max(16, inset - 6);
 /** The nav pill's height (Figma 119:3570). */
 export const NAV_H = 68;
 
@@ -50,9 +52,13 @@ export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
   useEffect(() => { if (active >= 0) pos.set(withTiming(active, SWITCH)); }, [active, pos]);
 
   const highlight = useAnimatedStyle(() => ({ transform: [{ translateX: pos.value * STEP }] }));
+  // Put away while My Deck shows its own "Go back to table" down here (Figma 355:30606).
+  const { away, hidden } = useNavChrome();
+  const drop = NAV_H + navBottom(insets.bottom) + 12;
+  const shown = useAnimatedStyle(() => ({ opacity: 1 - away.value, transform: [{ translateY: away.value * drop }] }));
 
   return (
-    <View style={[s.wrap, { paddingBottom: navBottom(insets.bottom) }]} pointerEvents="box-none">
+    <Animated.View style={[s.wrap, { paddingBottom: navBottom(insets.bottom) }, shown]} pointerEvents={hidden ? 'none' : 'box-none'}>
       <View style={s.pill}>
         <Animated.View style={[s.highlight, highlight]} pointerEvents="none" />
         {routes.map((r, i) => (
@@ -69,7 +75,7 @@ export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
         ))}
       </View>
       <DropFab />
-    </View>
+    </Animated.View>
   );
 }
 

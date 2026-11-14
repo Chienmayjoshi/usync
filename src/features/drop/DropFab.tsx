@@ -38,9 +38,9 @@ export function DropFab() {
 }
 
 const useStyles = makeStyles((t) => ({
-  // Figma 300:25891: 68, #FF7A59, 1.5 white stroke, shadows 0 20 25 / 0 10 10 (Figma blur).
+  // Figma 355:30934: 68, the brand #F76B1A, 1.5 white stroke, shadows 0 20 25 / 0 10 10 (Figma blur).
   fab: {
-    width: FAB, height: FAB, borderRadius: FAB / 2, backgroundColor: '#FF7A59',
+    width: FAB, height: FAB, borderRadius: FAB / 2, backgroundColor: t.color.brand,
     borderWidth: 1.5, borderColor: t.scheme === 'light' ? '#FFFFFF' : 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
     boxShadow: t.scheme === 'light' ? '0px 20px 25px rgba(0,0,0,0.1), 0px 10px 10px rgba(0,0,0,0.04)' : t.shadow.card,

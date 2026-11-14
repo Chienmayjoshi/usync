@@ -40,7 +40,7 @@ export default function PartnerScreen() {
   const them = names.partner;
 
   return (
-    <Screen title={them ?? 'Partner'} right={<HeaderAvatars />}>
+    <Screen title={them ?? 'Partner'} count={them && ready ? ranked.length : undefined} right={<HeaderAvatars />}>
       {!them ? (
         <Text variant="body/lg" color={t.color.text.secondary}>Your partner hasn’t joined yet. Share your code from the Table.</Text>
       ) : !ready ? null : ranked.length ? (

@@ -129,6 +129,20 @@ const light = {
   // The list fades out under the nav (Figma 232:22821).
   fade: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.9)', '#FFFFFF'],
   glowOpacity: 0.9,
+  // Figma "ui update 5" (355:31035): the brand accent, the dark-to-light screen, its light body.
+  brand: '#F76B1A',
+  backdrop: [
+    ['#0D0D0D', 0], ['#1A1A1A', 0.28241], ['#1D1C1C', 0.44668], ['#565555', 0.55708], ['#777676', 0.66394],
+    ['#ADACAC', 0.78124], ['#CACACA', 0.83989], ['#E7E7E7', 0.89854], ['#FFFFFF', 1],
+  ] as readonly (readonly [string, number])[],
+  body: { fill: '#FDFDFD', edge: '#FFFFFF' },
+  header: { ink: '#FFFFFF', button: '#383838', dot: '#5C5C5C' },
+  divider: '#EEEEEE',
+  deckChip: { active: '#F76B1A', onActive: '#FFFFFF', idle: '#F5F5F5', idleEdge: '#FFFFFF', idleInk: '#5C5C5C' },
+  handle: '#DADADA',
+  goBack: { fill: 'rgba(244,244,244,0.9)', border: '#DADADA', icon: '#5C5C5C', ink: '#1A1A1A' },
+  // Behind Go back to table (Figma 355:30756): clear, 80% at 41.5%, solid.
+  goBackFade: ['rgba(253,253,253,0)', 'rgba(253,253,253,0.8)', '#FDFDFD'],
 };
 
 const dark: typeof light = {
@@ -169,6 +183,16 @@ const dark: typeof light = {
   dotIdle: '#3A3542',
   fade: ['rgba(11,10,15,0)', 'rgba(11,10,15,0.9)', '#0B0A0F'],
   glowOpacity: 0.22,
+  brand: '#F76B1A',
+  // The same dark header, staying near black all the way down.
+  backdrop: [['#0D0D0D', 0], ['#1A1A1A', 0.28241], ['#141218', 0.6], ['#0B0A0F', 1]],
+  body: { fill: '#141218', edge: 'rgba(255,255,255,0.08)' },
+  header: { ink: '#FFFFFF', button: '#383838', dot: '#5C5C5C' },
+  divider: '#2A2631',
+  deckChip: { active: '#F76B1A', onActive: '#FFFFFF', idle: '#1E1B24', idleEdge: 'rgba(255,255,255,0.06)', idleInk: '#B4AEBD' },
+  handle: '#3A3542',
+  goBack: { fill: 'rgba(30,27,36,0.92)', border: '#3A3542', icon: '#B4AEBD', ink: '#F6F1E7' },
+  goBackFade: ['rgba(20,18,24,0)', 'rgba(20,18,24,0.8)', '#141218'],
 };
 
 export type ThemeColors = typeof light;

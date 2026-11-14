@@ -28,13 +28,14 @@ export function CloseIcon({ color }: { color: string }) {
   );
 }
 
-// Row stickers from the My Deck list (Figma 232:22741, 22755, 22769, 22780), rendered from the
-// SVG exports at 3x (they use filters react-native-svg cannot draw). Sizes are the exports' roots.
+// My Deck row stickers, white, drawn inside the task's coloured 48 box (Figma 355:30676, 30690,
+// 30704, 30715). Rendered from the SVG exports at 3x, as their texture filter is beyond
+// react-native-svg. Sizes are the exports' roots.
 const STICKERS = {
-  car: { src: require('@/../assets/illustrations/deck/car.png'), w: 43, h: 33 },
-  file: { src: require('@/../assets/illustrations/deck/file.png'), w: 37, h: 46 },
-  tooth: { src: require('@/../assets/illustrations/deck/tooth.png'), w: 46, h: 47 },
-  basket: { src: require('@/../assets/illustrations/deck/basket.png'), w: 45, h: 37.4265 },
+  car: { src: require('@/../assets/illustrations/deck/car.png'), w: 33, h: 25.05 },
+  file: { src: require('@/../assets/illustrations/deck/file.png'), w: 27, h: 34 },
+  tooth: { src: require('@/../assets/illustrations/deck/tooth.png'), w: 33, h: 34 },
+  basket: { src: require('@/../assets/illustrations/deck/basket.png'), w: 32.93, h: 28.08 },
 } as const;
 
 const BY_BUCKET: Record<Bucket, keyof typeof STICKERS> = {

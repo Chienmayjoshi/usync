@@ -9,11 +9,11 @@ import { Text } from './Text';
 type Person = { initial: string | null; avatar: string | null; color: PersonColor };
 
 /** One person: their emoji if they picked one, else their initial, on their color. */
-export function Avatar({ initial, avatar, color, size = 48 }: Person & { size?: number }) {
+export function Avatar({ initial, avatar, color, size = 48, ring }: Person & { size?: number; ring?: { width: number; color: string } }) {
   const t = useTheme();
   const s = useStyles();
   return (
-    <View style={[s.av, { width: size, height: size, borderRadius: size / 2, backgroundColor: t.tones[color].face }]}>
+    <View style={[s.av, { width: size, height: size, borderRadius: size / 2, backgroundColor: t.tones[color].face }, ring && { borderWidth: ring.width, borderColor: ring.color }]}>
       {avatar
         ? <Text style={{ fontSize: size * 0.5, lineHeight: size * 0.62 }}>{avatar}</Text>
         : <Text variant="title/md" color="#1A1A1A" style={{ fontSize: size * 0.4, lineHeight: size * 0.5 }}>{initial ?? '?'}</Text>}

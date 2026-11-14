@@ -1,17 +1,15 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Pressable, ScrollView, View } from 'react-native';
+import { type ComposedGesture, GestureDetector, type PanGesture } from 'react-native-gesture-handler';
 
 import { useNames } from '@/features/account/account';
-import { makeStyles, useTheme } from '@/theme/ThemeProvider';
-import { FilterChips } from '@/ui/FilterChips';
-
-import { deckMood, doneToday, lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
-import { useNow } from '@/features/mascot/useNow';
-
-import { AskCard } from './AskCard';
-import { DeckMascot } from './DeckMascot';
 import { revealLabel } from '@/features/drop/priority';
+import { lineFor, MOOD_FOR, nudgeKind, nudgeLevel } from '@/features/mascot/lines';
+import { useNow } from '@/features/mascot/useNow';
+import { haptics } from '@/theme/haptics';
+import { makeStyles, useTheme } from '@/theme/ThemeProvider';
+import { pad2 } from '@/ui/pad2';
+import { Text } from '@/ui/Text';
 
 import { type Card, forMe } from './model';
 import { SwipeRow } from './SwipeRow';
@@ -27,26 +25,24 @@ type Props = {
   /** A surprise's left swipe: reveal it a day later. */
   onPostpone: (c: Card) => void;
   onOpen: (c: Card) => void;
-  /** Answers to my partner's asks, shown pinned above the list (AskCard). */
-  onAccept: (c: Card) => void;
-  onDecline: (c: Card) => void;
-  /** Every card, for the deck mascot's rare good day (cards finished today). */
-  all: Card[];
   /** A card to bring into view ("id@time"), when sent here from Activity or a push. */
   focusId?: string;
   /** Shown when the chosen tab has nothing in it. */
   empty: ReactNode;
-  /** Room to leave under the last row for the pill and the nav. */
+  /** Room to leave under the last row for Go back to table. */
   bottomSpace: number;
+  /** Drags the sheet by its handle and chips. */
+  grip: PanGesture | ComposedGesture;
+  /** A tap on the handle: expand or settle back. */
+  onGripTap: () => void;
 };
 
-const FADE_H = 263;
-
 /**
- * My Deck as a list (Figma 223:22064): "My Tasks" and "Doing Together", one row per task.
- * Swipe a row right to finish it, left to put it back on the table for later.
+ * My Deck's sheet (Figma 355:30660): a handle, "My Tasks" and "Doing Together", and one row per
+ * task. Swipe a row right to finish it, left to put it back on the table for later. Asks are not
+ * here: they are decisions, shown as tiles above the sheet (DecisionTiles).
  */
-export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, onAccept, onDecline, all, focusId, empty, bottomSpace }: Props) {
+export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, focusId, empty, bottomSpace, grip, onGripTap }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -69,19 +65,12 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusId]);
   const litId = lit?.split('@')[0];
-  // Asks are decisions, not work: they leave the list for the pinned card above it.
-  const asks = cards.filter(forMe);
   const work = cards.filter((c) => !forMe(c));
   const mine = work.filter((c) => c.owner !== 'together');
   const together = [...work.filter((c) => c.owner === 'together'), ...pending];
 
   const shown = tab === 'mine' ? mine : together;
-  const f = t.color.fade;
   const now = useNow();
-  const finished = doneToday(all, now);
-  const showMascot = work.length > 0 || finished > 0;
-  // The deck's one mood; the card it talks about loses its own row line, so it isn't said twice.
-  const mood = deckMood(work, now, names.nudgeMax, names.voices.partner, finished);
   // A card sitting too long speaks in the partner's mascot's voice (0007's nudges, mirrored).
   const nudgeFor = (c: Card) => {
     const kind = nudgeKind(c);
@@ -93,23 +82,21 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
     };
   };
 
-
   return (
     <View style={s.fill}>
-      {asks.length ? (
-        <AskCard asks={focused(asks, focusId)} onAccept={onAccept} onDecline={onDecline} />
-      ) : showMascot ? (
-        <DeckMascot mood={mood} onOpen={onOpen} />
-      ) : null}
-      <FilterChips
-        value={tab}
-        onChange={setTab}
-        variant="deck"
-        glow={t.tones[names.colors.me].glow}
-        options={[{ value: 'mine', label: 'My Tasks', count: mine.length }, { value: 'together', label: 'Doing Together', count: together.length }]}
-      />
+      <GestureDetector gesture={grip}>
+        <View style={s.grip}>
+          <Pressable onPress={onGripTap} hitSlop={{ top: 12, bottom: 8, left: 40, right: 40 }} accessibilityRole="adjustable" accessibilityLabel="Resize the list">
+            <View style={[s.handle, { backgroundColor: t.color.handle }]} />
+          </Pressable>
+          <View style={s.tabs} accessibilityRole="tablist">
+            <TabChip label="My Tasks" count={mine.length} active={tab === 'mine'} onPress={() => setTab('mine')} />
+            <TabChip label="Doing Together" count={together.length} active={tab === 'together'} onPress={() => setTab('together')} />
+          </View>
+        </View>
+      </GestureDetector>
       {shown.length ? (
-        <ScrollView ref={scroll as never} style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator>
+        <ScrollView ref={scroll as never} style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator={false}>
           {shown.map((c, i) => {
             const waiting = pending.includes(c);
             const ink = t.tones[names.colors.partner].ink;
@@ -119,18 +106,19 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
               : undefined;
             return (
               <View key={c.id} onLayout={(e) => rowY.current.set(c.id, e.nativeEvent.layout.y)}>
-              <SwipeRow
-                lit={litId === c.id ? lit : null}
-                card={c}
-                first={i === 0}
-                onOpen={() => onOpen(c)}
-                onDone={waiting ? undefined : () => onDone(c)}
-                onLater={waiting || c.owner === 'together' ? undefined : c.surprise ? () => onPostpone(c) : () => onLater(c)}
-                laterStays={c.surprise}
-                labels={c.surprise ? { done: 'REVEAL', later: '+1 DAY' } : undefined}
-                note={note ? { text: note, ink: c.surprise ? t.color.accent.tag : ink } : undefined}
-                nudge={waiting || (!asks.length && c.id === mood.card?.id) ? undefined : nudgeFor(c)}
-              />
+                <SwipeRow
+                  lit={litId === c.id ? lit : null}
+                  card={c}
+                  first={i === 0}
+                  last={i === shown.length - 1}
+                  onOpen={() => onOpen(c)}
+                  onDone={waiting ? undefined : () => onDone(c)}
+                  onLater={waiting || c.owner === 'together' ? undefined : c.surprise ? () => onPostpone(c) : () => onLater(c)}
+                  laterStays={c.surprise}
+                  labels={c.surprise ? { done: 'REVEAL', later: '+1 DAY' } : undefined}
+                  note={note ? { text: note, ink: c.surprise ? t.color.accent.tag : ink } : undefined}
+                  nudge={waiting ? undefined : nudgeFor(c)}
+                />
               </View>
             );
           })}
@@ -138,34 +126,39 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
       ) : (
         <View style={s.empty}>{empty}</View>
       )}
-      {/* Figma 232:22821: the list fades to white under the pill and the nav. */}
-      <View style={[s.fade, { height: FADE_H }]} pointerEvents="none">
-        <Svg width="100%" height={FADE_H}>
-          <Defs>
-            <LinearGradient id="deckFade" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={f[0]} />
-              <Stop offset="0.28621" stopColor={f[1]} />
-              <Stop offset="1" stopColor={f[2]} />
-            </LinearGradient>
-          </Defs>
-          <Rect x="0" y="0" width="100%" height={FADE_H} fill="url(#deckFade)" />
-        </Svg>
-      </View>
     </View>
+  );
+}
+
+/** Figma 355:30665 / 355:30670: the chosen list in the brand orange, the other one quiet. */
+function TabChip({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) {
+  const t = useTheme();
+  const s = useStyles();
+  const c = t.color.deckChip;
+  const ink = active ? c.onActive : c.idleInk;
+  return (
+    <Pressable
+      onPress={() => { if (!active) { haptics.tick(); onPress(); } }}
+      style={[s.chip, active ? { backgroundColor: c.active } : { backgroundColor: c.idle, borderWidth: 1.5, borderColor: c.idleEdge }]}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${label}, ${count}`}
+    >
+      <Text style={s.chipLabel} color={ink} numberOfLines={1}>{label}</Text>
+      <Text style={s.chipCount} color={ink}>{pad2(count)}</Text>
+    </Pressable>
   );
 }
 
 const useStyles = makeStyles(() => ({
   fill: { flex: 1 },
-  // Figma: the list starts 24 under the chips.
-  list: { paddingTop: 24 - 4 },
-  empty: { paddingTop: 40 },
-  fade: { position: 'absolute', left: -20, right: -20, bottom: 0 },
+  // Figma 355:30661: the handle, 16, then the chips; 12 more down to the list.
+  grip: { alignItems: 'center', gap: 16, paddingTop: 8, paddingBottom: 12, paddingHorizontal: 16 },
+  handle: { width: 40, height: 4, borderRadius: 12 },
+  tabs: { flexDirection: 'row', gap: 12, alignSelf: 'stretch' },
+  chip: { flex: 1, height: 32, borderRadius: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12, overflow: 'hidden' },
+  chipLabel: { fontFamily: 'Satoshi-Medium', fontSize: 14, lineHeight: 19, flexShrink: 1 },
+  chipCount: { fontFamily: 'Satoshi-Bold', fontSize: 14, lineHeight: 19 },
+  list: { paddingHorizontal: 16 },
+  empty: { paddingTop: 40, paddingHorizontal: 16 },
 }));
-
-/** The ask a tap was about goes first in the pinned stack. */
-function focused(asks: Card[], focusId?: string) {
-  const id = focusId?.split('@')[0];
-  const i = id ? asks.findIndex((a) => a.id === id) : -1;
-  return i > 0 ? [asks[i], ...asks.slice(0, i), ...asks.slice(i + 1)] : asks;
-}
