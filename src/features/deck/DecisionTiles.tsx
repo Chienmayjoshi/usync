@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 import { useNames } from '@/features/account/account';
@@ -29,17 +29,22 @@ type Props = { asks: Card[]; onAccept: (c: Card) => void; onDecline: (c: Card) =
  */
 export function DecisionTiles({ asks, onAccept, onDecline }: Props) {
   const s = useStyles();
+  const { width } = useWindowDimensions();
+  // A single decision takes the full width; several keep Figma's 300 so the next one peeks in.
+  const only = asks.length === 1;
+  const w = only ? width - SIDE * 2 : TILE_W;
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      snapToInterval={TILE_W + GAP}
+      scrollEnabled={!only}
+      snapToInterval={w + GAP}
       decelerationRate="fast"
       contentContainerStyle={s.row}
       style={s.scroll}
     >
       {asks.map((c, i) => (
-        <Tile key={c.id} card={c} index={i} onAccept={() => onAccept(c)} onDecline={() => onDecline(c)} />
+        <Tile key={c.id} card={c} index={i} width={w} onAccept={() => onAccept(c)} onDecline={() => onDecline(c)} />
       ))}
     </ScrollView>
   );
@@ -55,7 +60,7 @@ const slideIn = (delay: number) => () => {
   };
 };
 
-function Tile({ card, index, onAccept, onDecline }: { card: Card; index: number; onAccept: () => void; onDecline: () => void }) {
+function Tile({ card, index, width, onAccept, onDecline }: { card: Card; index: number; width: number; onAccept: () => void; onDecline: () => void }) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -72,7 +77,7 @@ function Tile({ card, index, onAccept, onDecline }: { card: Card; index: number;
       entering={entering}
       exiting={FadeOut.duration(140).easing(OUT)}
       layout={reduced ? undefined : LinearTransition.duration(220).easing(OUT)}
-      style={[s.tile, { backgroundColor: tone.card }]}
+      style={[s.tile, { width, backgroundColor: tone.card }]}
     >
       {/* Figma 355:30625-6: a 152 light top left, a 332 x 334 light top right. */}
       <Blobs

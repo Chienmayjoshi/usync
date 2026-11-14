@@ -18,6 +18,7 @@ import { DeckPill, PILL_ABOVE_NAV, PILL_OUTER } from '@/features/deck/DeckPill';
 import { sheetFollow, sheetSnap } from '@/features/deck/deckSheet';
 import { CARD_H } from '@/features/deck/DealCard';
 import { GO_BACK_H, GoBack, goBackBottom } from '@/features/deck/GoBack';
+import { TaskActions } from '@/features/deck/TaskActions';
 import { type Card, deckCards, forMe, pendingTogether, tableCards } from '@/features/deck/model';
 import { useFocus } from '@/features/deck/focus';
 import { useDeck } from '@/features/deck/store';
@@ -66,6 +67,9 @@ export default function TableScreen() {
   useMascotPrompt();
   useLightStatusBar();
   const [updating, setUpdating] = useState<Card | null>(null);
+  // A tapped task's drawer: back to the table, add an update, delete. `fromTable`: only delete.
+  const [acting, setActing] = useState<{ card: Card; fromTable?: boolean } | null>(null);
+  const [overflow, setOverflow] = useState(false);
   const [opened, setOpened] = useState<{ card: Card; from: Rect } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [raised, setRaised] = useState(false);
@@ -80,6 +84,10 @@ export default function TableScreen() {
   const table = solo ? [...deckCards(state), ...tableCards(state)] : tableCards(state);
   const deck = deckCards(state);
   const asks = deck.filter(forMe);
+  const pending = pendingTogether(state);
+  // What My Deck lists, under My Tasks and Doing Together (asks are decisions, above it): one
+  // count for the pill, the header and the two chips.
+  const mine = [...deck.filter((c) => !forMe(c)), ...pending.filter((p) => !deck.some((c) => c.id === p.id))];
   const bodyTop = insets.top + BODY_TOP;
   const tilesTop = insets.top + TILES_TOP;
   const restTop = asks.length ? insets.top + SHEET_REST : tilesTop;
@@ -187,7 +195,7 @@ export default function TableScreen() {
     <View style={s.screen}>
       <Backdrop />
       {/* Figma 355:30854: the header on the dark top, 72 down on a 54 inset. */}
-      <ScreenHeader title={expanded ? 'My deck' : 'On table'} count={ready ? (expanded ? deck.length : table.length) : undefined} />
+      <ScreenHeader title={expanded ? 'My deck' : 'On table'} count={ready ? (expanded ? mine.length : table.length) : undefined} />
 
       {expanded && asks.length > 0 && (
         <Animated.View style={[s.tiles, { top: tilesTop }]} exiting={FadeOut.duration(140)}>
@@ -201,12 +209,14 @@ export default function TableScreen() {
           <Animated.View style={[s.sheet, { height: screenH - tilesTop }, listIn]} pointerEvents={expanded ? 'box-none' : 'none'}>
             <DeckList
               cards={deck}
-              pending={pendingTogether(state)}
+              pending={pending}
               focusId={expanded ? focusId : undefined}
               onDone={(c) => move(c, 'done')}
               onLater={(c) => move(c, 'table')}
               onPostpone={(c) => move(c, 'postpone')}
-              onOpen={setUpdating}
+              onOpen={(card) => setActing({ card })}
+              covered={(raised ? 0 : restTop - tilesTop) + GO_BACK_H + goBackBottom(insets.bottom)}
+              onOverflow={setOverflow}
               bottomSpace={GO_BACK_H + goBackBottom(insets.bottom) + 24 + (raised ? 0 : restTop - tilesTop)}
               grip={grip}
               onGripTap={tapGrip}
@@ -251,13 +261,30 @@ export default function TableScreen() {
 
       {!solo && (
         <Animated.View style={[s.pill, pillAway]} pointerEvents={expanded ? 'none' : 'box-none'}>
-          <DeckPill cards={deck} onToggle={toggle} bottom={pillBottom} rect={rect} slot={slot} ready={trayReady} hot={hot} peek={peek} />
+          <DeckPill cards={mine} onToggle={toggle} bottom={pillBottom} rect={rect} slot={slot} ready={trayReady} hot={hot} peek={peek} />
         </Animated.View>
       )}
 
-      {!solo && <GoBack onBack={toggle} shown={mode} visible={expanded} />}
+      {!solo && <GoBack onBack={toggle} shown={mode} visible={expanded} overflow={overflow} />}
 
-      {opened && <CardDetail card={opened.card} from={opened.from} onClosed={() => setOpened(null)} onUpdate={setUpdating} />}
+      {opened && (
+        <CardDetail
+          card={opened.card}
+          from={opened.from}
+          onClosed={() => setOpened(null)}
+          onUpdate={setUpdating}
+          onMore={(card) => setActing({ card, fromTable: true })}
+        />
+      )}
+      {acting && (
+        <TaskActions
+          card={acting.card}
+          onClose={() => setActing(null)}
+          onTable={acting.fromTable || pending.some((p) => p.id === acting.card.id) ? undefined : () => move(acting.card, 'table')}
+          onUpdate={acting.fromTable ? undefined : () => setUpdating(acting.card)}
+          onDelete={() => move(acting.card, 'delete')}
+        />
+      )}
       {updating && <UpdateSheet card={updating} onClose={() => setUpdating(null)} />}
     </View>
   );

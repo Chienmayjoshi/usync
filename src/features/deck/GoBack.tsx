@@ -1,4 +1,5 @@
-import { Pressable, View } from 'react-native';
+import { useEffect } from 'react';
+import { Platform, Pressable, View } from 'react-native';
 import Animated, { Easing, type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
@@ -10,7 +11,7 @@ const OUT = Easing.bezier(0.23, 1, 0.32, 1);
 /** The fade behind the button (Figma 355:30756): 162 tall. */
 export const GO_BACK_FADE = 162;
 /** From the screen bottom to the button's bottom edge (Figma: 56 on a 34 inset). */
-export const goBackBottom = (inset: number) => inset + 22;
+export const goBackBottom = (inset: number) => (Platform.OS === 'ios' ? inset + 22 : inset + 20);
 /** The button with its 3 ring, 54 tall. */
 export const GO_BACK_H = 54;
 
@@ -19,34 +20,39 @@ type Props = {
   /** 0 on the Table, 1 in My Deck: the button rises in last and goes first. */
   shown: SharedValue<number>;
   visible: boolean;
+  /** The list runs on under the button: only then does it fade out behind it. */
+  overflow: boolean;
 };
 
 /**
  * "Go back to table" (Figma 355:30757): a light pill floating at the bottom of My Deck where the
  * nav was, over a fade that lets the list dissolve under it.
  */
-export function GoBack({ onBack, shown, visible }: Props) {
+export function GoBack({ onBack, shown, visible, overflow }: Props) {
   const t = useTheme();
   const s = useStyles();
   const insets = useSafeAreaInsets();
   const g = t.color.goBack;
-  const f = t.color.goBackFade;
+  const f = t.color.body.fill;
+  const over = useSharedValue(overflow ? 1 : 0);
+  useEffect(() => { over.set(withTiming(overflow ? 1 : 0, { duration: 200, easing: OUT })); }, [overflow, over]);
   const press = useSharedValue(1);
   // Later than the rest of the switch: starts once the sheet is a third of the way in.
   const button = useAnimatedStyle(() => {
     const p = Math.max(0, Math.min(1, (shown.value - 0.35) / 0.65));
     return { opacity: p, transform: [{ translateY: (1 - p) * 16 }, { scale: press.value }] };
   });
-  const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
+  const fade = useAnimatedStyle(() => ({ opacity: shown.value * over.value }));
   return (
     <View style={s.fill} pointerEvents="box-none">
       <Animated.View style={[s.fade, fade]} pointerEvents="none">
         <Svg width="100%" height={GO_BACK_FADE}>
           <Defs>
             <LinearGradient id="goBackFade" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={f[0]} />
-              <Stop offset="0.41527" stopColor={f[1]} />
-              <Stop offset="1" stopColor={f[2]} />
+              {/* Opacity on its own: Android's SVG ignores the alpha in an rgba stop colour. */}
+              <Stop offset="0" stopColor={f} stopOpacity={0} />
+              <Stop offset="0.41527" stopColor={f} stopOpacity={0.8} />
+              <Stop offset="1" stopColor={f} stopOpacity={1} />
             </LinearGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height={GO_BACK_FADE} fill="url(#goBackFade)" />
@@ -89,7 +95,8 @@ function TableFill({ color }: { color: string }) {
 
 const useStyles = makeStyles(() => ({
   fill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 7 },
-  fade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: GO_BACK_FADE },
+  // Over the body only (8 in from each side), not the backdrop beside it.
+  fade: { position: 'absolute', left: 8, right: 8, bottom: 0, height: GO_BACK_FADE },
   row: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   // Figma 355:30757: a 3 ring round a 48 pill.
   ring: { padding: 3 },

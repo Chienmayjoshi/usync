@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { DropFab } from '@/features/drop/DropFab';
@@ -14,10 +14,11 @@ import { HeartFillIcon, HeartLineIcon, SyncFillIcon, SyncLineIcon, TableFillIcon
 import { Text } from './Text';
 
 /**
- * Gap under the floating nav: Figma 355:30914 leaves 28 under it on a 34pt-inset iPhone, so it
- * is the system inset - 6, never under 16. Android's 3 button bar inset still lifts it clear.
+ * Gap under the floating nav. iOS: Figma 355:30914 leaves 28 under it on a 34pt inset, so the
+ * inset - 6 (never under 16), sitting over the home indicator's strip. Android keeps 14 above
+ * its inset, so it never touches the 3 button bar.
  */
-export const navBottom = (inset: number) => Math.max(16, inset - 6);
+export const navBottom = (inset: number) => (Platform.OS === 'ios' ? Math.max(16, inset - 6) : inset + 14);
 /** The nav pill's height (Figma 119:3570). */
 export const NAV_H = 68;
 

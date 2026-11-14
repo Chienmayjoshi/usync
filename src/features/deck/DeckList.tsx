@@ -35,6 +35,10 @@ type Props = {
   grip: PanGesture | ComposedGesture;
   /** A tap on the handle: expand or settle back. */
   onGripTap: () => void;
+  /** Points at the bottom of the list that are off screen or under Go back. */
+  covered: number;
+  /** Whether the rows run on under that: Go back's fade shows only then. */
+  onOverflow: (over: boolean) => void;
 };
 
 /**
@@ -42,7 +46,7 @@ type Props = {
  * task. Swipe a row right to finish it, left to put it back on the table for later. Asks are not
  * here: they are decisions, shown as tiles above the sheet (DecisionTiles).
  */
-export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, focusId, empty, bottomSpace, grip, onGripTap }: Props) {
+export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onOpen, focusId, empty, bottomSpace, grip, onGripTap, covered, onOverflow }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -70,6 +74,9 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
   const together = [...work.filter((c) => c.owner === 'together'), ...pending];
 
   const shown = tab === 'mine' ? mine : together;
+  const [box, setBox] = useState({ view: 0, content: 0 });
+  const over = shown.length > 0 && box.content - bottomSpace > box.view - covered;
+  useEffect(() => { onOverflow(over); }, [over, onOverflow]);
   const now = useNow();
   // A card sitting too long speaks in the partner's mascot's voice (0007's nudges, mirrored).
   const nudgeFor = (c: Card) => {
@@ -96,7 +103,11 @@ export function DeckList({ cards, pending = [], onDone, onLater, onPostpone, onO
         </View>
       </GestureDetector>
       {shown.length ? (
-        <ScrollView ref={scroll as never} style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          ref={scroll as never}
+          onLayout={(e) => { const view = e.nativeEvent.layout.height; setBox((b) => (b.view === view ? b : { ...b, view })); }}
+          onContentSizeChange={(_, content) => setBox((b) => (b.content === content ? b : { ...b, content }))}
+          style={s.fill} contentContainerStyle={[s.list, { paddingBottom: bottomSpace }]} showsVerticalScrollIndicator={false}>
           {shown.map((c, i) => {
             const waiting = pending.includes(c);
             const ink = t.tones[names.colors.partner].ink;

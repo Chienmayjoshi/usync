@@ -1,5 +1,5 @@
 import {
-  ArrowCircleDown, ArrowCircleUp, CalendarDots, ChatCircleText, CheckCircle, DotOutline, Gift, Handshake, HourglassMedium,
+  ArrowCircleDown, ArrowCircleUp, CalendarDots, ChatCircleText, CheckCircle, DotOutline, DotsThree, Gift, Handshake, HourglassMedium,
   type IconProps, PlusCircle, Question, X, XCircle,
 } from 'phosphor-react-native';
 import { type ComponentType, useEffect, useState } from 'react';
@@ -42,6 +42,8 @@ type Props = {
   from: Rect;
   onClosed: () => void;
   onUpdate: (card: Card) => void;
+  /** The "more" button left of close: it closes the card, then opens its actions (delete). */
+  onMore?: (card: Card) => void;
 };
 
 /**
@@ -50,7 +52,7 @@ type Props = {
  * the story, and "Add an update" pinned to the bottom. Close (X, back, or pull it down) and it
  * shrinks back into the stack.
  */
-export function CardDetail({ card, from, onClosed, onUpdate }: Props) {
+export function CardDetail({ card, from, onClosed, onUpdate, onMore }: Props) {
   const t = useTheme();
   const s = useStyles();
   const names = useNames();
@@ -160,10 +162,18 @@ export function CardDetail({ card, from, onClosed, onUpdate }: Props) {
                         </View>
                       ))}
                     </View>
-                    <Pressable onPress={() => close()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close"
-                      style={({ pressed }) => [s.close, pressed && s.pressed]}>
-                      <X size={24} color="#1A1A1A" />
-                    </Pressable>
+                    <View style={s.buttons}>
+                      {onMore && (
+                        <Pressable onPress={() => close(() => onMore(card))} hitSlop={8} accessibilityRole="button" accessibilityLabel="More options"
+                          style={({ pressed }) => [s.close, pressed && s.pressed]}>
+                          <DotsThree size={24} weight="bold" color="#1A1A1A" />
+                        </Pressable>
+                      )}
+                      <Pressable onPress={() => close()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close"
+                        style={({ pressed }) => [s.close, pressed && s.pressed]}>
+                        <X size={24} color="#1A1A1A" />
+                      </Pressable>
+                    </View>
                   </View>
                 </Stage>
                 {/* Figma 319:26419: what it is. */}
@@ -253,6 +263,7 @@ const useStyles = makeStyles(() => ({
   content: { ...StyleSheet.absoluteFill, paddingHorizontal: 40 },
   head: { gap: 40, paddingBottom: 40 },
   top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  buttons: { flexDirection: 'row', gap: 12 },
   people: { flexDirection: 'row' },
   // 48 with a 2 white edge.
   face: { borderRadius: 24, borderWidth: 2, borderColor: '#FFFFFF' },

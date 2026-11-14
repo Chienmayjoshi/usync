@@ -235,7 +235,7 @@ function Tokens({ cards: all }: { cards: Card[] }) {
       {/* Keyed by the count, so it pops each time the deck grows or shrinks. */}
       {rest > 0 && (
         <Animated.View key={rest} entering={pop} style={s.countWrap}>
-          <View style={s.count}><Text style={s.countText}>{`+${rest}`}</Text></View>
+          <View style={s.count}><Text style={s.countText} numberOfLines={1}>{`+${rest}`}</Text></View>
         </Animated.View>
       )}
     </View>
@@ -291,7 +291,8 @@ const useStyles = makeStyles(() => ({
   // Figma: a 7 red dot with a white edge on the newest token's top right corner.
   badge: { position: 'absolute', top: 0.3, right: -2.5, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5D54', borderWidth: 1, borderColor: '#FFFFFF' },
   // Figma 300:25539: a white tag, tilted 4deg, over the front token's left edge.
-  countWrap: { position: 'absolute', left: 0, top: 13, width: 36, alignItems: 'center' },
+  // Sized to its text, so "+12" stays on one line; it grows to the right, over the front token.
+  countWrap: { position: 'absolute', left: 0, top: 13, minWidth: 36, alignItems: 'center' },
   count: { backgroundColor: '#FFFFFF', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, transform: [{ rotate: '4deg' }], boxShadow: '0px 8px 12px rgba(149,157,165,0.2)' },
   countText: { fontFamily: 'Satoshi-Bold', fontSize: 14, lineHeight: 19, color: '#466FF6' },
 }));
